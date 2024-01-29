@@ -1,0 +1,10 @@
+# Ignore everything
+*
+
+# Allow files and directories
+!/*.go
+!/*.mod
+!/*.sum
+!/*env
+!/*postgres
+!/*rabbit
