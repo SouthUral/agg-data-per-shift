@@ -26,12 +26,14 @@ services:
     volumes:
     - ./pg_dump:/docker-entrypoint-initdb.d
     ports:
-    - "5432:5432"
+    - "5433:5432"
 
-  # send_mq:
-  #   build: ./send_mq_msg
-  #   container_name: send_mq
-  #   restart: always
-  #   expose:
-  #     - 5422
+  messdeliv:
+    build: ./messdeliv
+    container_name: messdeliv
+    restart: always
+    env_file:
+      - ./messdeliv/.env
+    expose:
+      - 5422
     
