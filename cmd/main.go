@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"time"
 
+	// "encoding/json"
+
 	log "github.com/sirupsen/logrus"
 )
 
@@ -30,10 +32,10 @@ func main() {
 			switch message.GetTypeMsg() {
 			case "GetOffset":
 				message.GetReverceCh() <- answerEvent{
-					offset: 10,
+					offset: 0,
 				}
 			case "InputMSG":
-				log.Infof("message: %v, offset: %d", message.GetMsg(), message.GetOffset())
+				log.Infof("message: %v, offset: %d", string(message.GetMsg()), message.GetOffset())
 				message.GetReverceCh() <- answerEvent{}
 			default:
 				rb.RabbitShutdown(fmt.Errorf("неизвестный тип событий"))
