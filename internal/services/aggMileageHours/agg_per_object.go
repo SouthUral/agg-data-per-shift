@@ -65,7 +65,7 @@ func (a *AggDataPerObject) eventHandling(eventData *eventData) {
 	// - TODO: нужно определить в к какой смене относится событие;
 	// - TODO: нужно определить, не поменялся ли водитель на технике;
 	// - TODO:
-	log.Debugf("%v", eventData)
+	log.Debugf("%+v, mess_time: %s", eventData, eventData.mesTime)
 
 }
 

@@ -59,7 +59,6 @@ func main() {
 				return
 			}
 		}
-		time.Sleep(3 * time.Second)
 	}
 }
 

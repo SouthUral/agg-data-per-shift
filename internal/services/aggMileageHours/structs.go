@@ -46,22 +46,23 @@ type rawEventData struct {
 		Mileage     int     `json:"mileage"`      // data -> mileage : пробег
 		GpsMileage  int     `json:"gps_mileage"`  // data -> gps_mileage : пробег по gps
 		EngineHours float64 `json:"engine_hours"` // data -> engine_hours : моточасы
-	}
+	} `json:"data"`
 	EventData struct {
 		DriverInfo struct {
 			Fio    string `json:"fio"`
 			TabNum int    `json:"tab_num,string"`
 		} `json:"driver_info"`
-	}
-	ObjectID int       `json:"object_id"` // object_id : id техники
-	MesTime  time.Time `json:"mes_time"`  // mes_time : время сообщения
+	} `json:"event_data"`
+	ObjectID int    `json:"object_id"` // object_id : id техники
+	MesTime  string `json:"mes_time"`  // mes_time : время сообщения
 }
 
-func (e rawEventData) getDecryptedData() *eventData {
+func (e rawEventData) getDecryptedData() (*eventData, error) {
+	messTime, err := timeConversion(e.MesTime)
 	data := &eventData{
 		typeEvent:   e.EventInfo.Const,
 		objectID:    e.ObjectID,
-		mesTime:     e.MesTime,
+		mesTime:     messTime,
 		mileage:     e.Data.Mileage,
 		gpsMileage:  e.Data.GpsMileage,
 		engineHours: e.Data.EngineHours,
@@ -69,7 +70,7 @@ func (e rawEventData) getDecryptedData() *eventData {
 		numDriver:   e.EventData.DriverInfo.TabNum,
 	}
 
-	return data
+	return data, err
 }
 
 type eventData struct {

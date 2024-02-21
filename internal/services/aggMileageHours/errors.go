@@ -23,3 +23,11 @@ type stoppedEventRouterError struct {
 func (e stoppedEventRouterError) Error() string {
 	return "eventRouter has stopped working for a reason:"
 }
+
+// остановка EventRouter
+type timeParseError struct {
+}
+
+func (e timeParseError) Error() string {
+	return "time parse error"
+}

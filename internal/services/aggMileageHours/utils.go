@@ -3,6 +3,8 @@ package aggmileagehours
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
+	"time"
 )
 
 // функция преобразования []byte во внутреннюю структуру eventData
@@ -17,7 +19,10 @@ func decodingMessage(msg []byte) (*eventData, error) {
 		return eventData, err
 	}
 
-	eventData = data.getDecryptedData()
+	eventData, err = data.getDecryptedData()
+	if err != nil {
+		err = fmt.Errorf("%w: %w", timeParseError{}, err)
+	}
 
 	return eventData, err
 }
@@ -32,4 +37,12 @@ func typeConversion[T any](data interface{}) (T, error) {
 	}
 
 	return conversionData, err
+}
+
+func timeConversion(date string) (time.Time, error) {
+	dateSplits := strings.Split(date, ".")
+	dateSplits[1] = dateSplits[1][:3]
+	timeToFormat := strings.Join(dateSplits, ".")
+	resTime, err := time.Parse(timeLayOut, timeToFormat)
+	return resTime, err
 }

@@ -23,6 +23,7 @@ func InitEventRouter() (*EventRouter, context.Context) {
 	res := &EventRouter{
 		incomingEventCh: make(chan interface{}),
 		cancel:          cancel,
+		aggObjs:         make(map[int]*AggDataPerObject),
 	}
 
 	go res.routing(ctx)
