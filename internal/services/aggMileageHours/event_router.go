@@ -17,10 +17,21 @@ type EventRouter struct {
 	cancel          func()
 }
 
-func InitEventRouter() *EventRouter {
-	res := &EventRouter{}
+func InitEventRouter() (*EventRouter, context.Context) {
+	ctx, cancel := context.WithCancel(context.Background())
 
-	return res
+	res := &EventRouter{
+		incomingEventCh: make(chan interface{}),
+		cancel:          cancel,
+	}
+
+	go res.routing(ctx)
+
+	return res, ctx
+}
+
+func (e *EventRouter) GetIncomingEventCh() chan interface{} {
+	return e.incomingEventCh
 }
 
 func (e *EventRouter) routing(ctx context.Context) {
@@ -33,21 +44,17 @@ func (e *EventRouter) routing(ctx context.Context) {
 			if err != nil {
 				log.Error(err)
 				e.Shudown(err)
+				return
 			}
 
-			eventData, err := decodingMessage(message.GetMessage())
+			eventData, err := decodingMessage(message.GetMsg())
 			if err != nil {
 				log.Error(err)
 				e.Shudown(err)
+				return
 			}
 
-			obj, ok := e.aggObjs[eventData.objectID]
-			if !ok {
-				// TODO: инициализировать новый объект
-			}
-			// отправка события объекту агрегации
-			obj.eventReception(message.GetOffset(), eventData)
-
+			e.sendingEventToAggObj(message.GetOffset(), eventData)
 		}
 	}
 
@@ -60,17 +67,26 @@ func (e *EventRouter) Shudown(err error) {
 	e.cancel()
 }
 
-func (e *EventRouter) sendingEventToAggObj(offsetEvent int, event *eventData) {
-
+func (e *EventRouter) sendingEventToAggObj(offsetEvent int64, event *eventData) {
+	obj := e.getAggObj(event.objectID)
+	obj.eventReception(offsetEvent, event)
 }
 
 func (e *EventRouter) getAggObj(objId int) *AggDataPerObject {
 	obj, ok := e.aggObjs[objId]
 	if !ok {
-
+		obj = e.createNewAggObj(objId)
 	}
+	return obj
 }
 
 func (e *EventRouter) createNewAggObj(objId int) *AggDataPerObject {
+	aggObj, _ := initAggDataPerObject(objId, e.settingShift)
+	e.aggObjs[objId] = aggObj
+	return aggObj
+}
 
+// метод для отрправки событий в роутер
+func (e *EventRouter) EventReception(event interface{}) {
+	e.incomingEventCh <- event
 }

@@ -1,6 +1,6 @@
 package aggmileagehours
 
 type incomingMessage interface {
-	GetOffset() int
-	GetMessage() []byte
+	GetOffset() int64
+	GetMsg() []byte
 }

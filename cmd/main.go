@@ -1,29 +1,44 @@
 package main
 
 import (
-	amqp "agg-data-per-shift/internal/amqp/amqp_client"
 	"fmt"
+	"os"
 	"time"
 
-	// "encoding/json"
+	amqp "agg-data-per-shift/internal/amqp/amqp_client"
+	aggMileage "agg-data-per-shift/internal/services/aggMileageHours"
 
 	log "github.com/sirupsen/logrus"
 )
 
+func init() {
+	log.SetFormatter(&log.JSONFormatter{})
+	log.SetOutput(os.Stdout)
+	log.SetLevel(log.DebugLevel)
+}
+
 func main() {
+
 	envRabbit := "amqp://test_user:rmpassword@localhost:5672/asd"
 	nameConsumer := "test_consumer"
 	stream := "messages_stream"
 
 	rb := amqp.InitRabbit(envRabbit, stream, nameConsumer, 30)
-	ctx := rb.StartRb()
+	ctxRb := rb.StartRb()
 
-	ch := rb.GetChan()
+	aggEventRouter, ctxEventRouter := aggMileage.InitEventRouter()
+
 	for {
 		select {
-		case <-ctx.Done():
+		case <-ctxRb.Done():
+			aggEventRouter.Shudown(fmt.Errorf("rabbitMQ закончил работу"))
+			time.Sleep(5 * time.Second)
 			return
-		case msg := <-ch:
+		case <-ctxEventRouter.Done():
+			rb.RabbitShutdown(fmt.Errorf("роутер закончил работу"))
+			time.Sleep(5 * time.Second)
+			return
+		case msg := <-rb.GetChan():
 			message, ok := msg.(msgEvent)
 			if !ok {
 				rb.RabbitShutdown(fmt.Errorf("ошибка приведения типа"))
@@ -35,8 +50,10 @@ func main() {
 					offset: 0,
 				}
 			case "InputMSG":
-				log.Infof("message: %v, offset: %d", string(message.GetMsg()), message.GetOffset())
+				log.Debugf("offset: %d", message.GetOffset())
 				message.GetReverceCh() <- answerEvent{}
+				aggEventRouter.EventReception(message)
+
 			default:
 				rb.RabbitShutdown(fmt.Errorf("неизвестный тип событий"))
 				return

@@ -2,6 +2,6 @@ package aggmileagehours
 
 // события для отправки в горутину агрегации
 type eventForAgg struct {
-	offset    int
+	offset    int64
 	eventData *eventData
 }

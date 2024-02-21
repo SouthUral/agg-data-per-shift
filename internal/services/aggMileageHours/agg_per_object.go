@@ -10,7 +10,7 @@ import (
 type AggDataPerObject struct {
 	objectId      int                     // objectId техники
 	shiftData     shiftObjData            // данные за смену
-	lastOffset    int                     // последний offset загруженный в БД
+	lastOffset    int64                   // последний offset загруженный в БД
 	incomingCh    chan eventForAgg        // канал для получения событий
 	cancel        func()                  // функция для завршения конекста
 	settingsShift *settingsDurationShifts // настройки смены, меняются централизованно
@@ -22,7 +22,7 @@ type AggDataPerObject struct {
 // TODO: при инициализации нужно полностью восстановить информацию о смене
 // TODO: горутина сама восстанавливает информацию о смене, после создания она отправляет запрос в БД на восстановление состояния
 
-func initAggDataPerObject(objectId int, settingsShift *settingsDurationShifts) *AggDataPerObject {
+func initAggDataPerObject(objectId int, settingsShift *settingsDurationShifts) (*AggDataPerObject, context.Context) {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	res := &AggDataPerObject{
@@ -32,10 +32,15 @@ func initAggDataPerObject(objectId int, settingsShift *settingsDurationShifts) *
 		settingsShift: settingsShift,
 	}
 
+	// при запуске нужно восстановить состояние, нужно отправить запрос в БД на восстановление состояния
+	// данные о текущем состоянии сохраняются в AggDataPerObject.shiftData
+	// запуск горутины чтения должен происходить после восстановления состояния
+
 	// запуск горутины получения событий
 	go res.gettingEvents(ctx)
 
-	return res
+	log.Infof("created aggDataObj with objectId: %d", objectId)
+	return res, ctx
 }
 
 // процесс получения событий из маршрутизатора
@@ -48,25 +53,24 @@ func (a *AggDataPerObject) gettingEvents(ctx context.Context) {
 			return
 		case msg := <-a.incomingCh:
 			// если offset событий меньше текущего offset тогда событие игнорируется
-			if msg.offset <= a.lastOffset {
-				continue
+			if msg.offset > a.lastOffset {
+				a.eventHandling(msg.eventData)
 			}
-			// - TODO: нужно определить в к какой смене относится событие;
-			// - TODO: нужно определить, не поменялся ли водитель на технике;
-			// - TODO:
-
 		}
 	}
 }
 
 // метод обрабатывает событие:
-// -
-func (a *AggDataPerObject) eventHandling(eventData []byte) {
+func (a *AggDataPerObject) eventHandling(eventData *eventData) {
+	// - TODO: нужно определить в к какой смене относится событие;
+	// - TODO: нужно определить, не поменялся ли водитель на технике;
+	// - TODO:
+	log.Debugf("%v", eventData)
 
 }
 
 // метод для отправки события в обработчик
-func (a *AggDataPerObject) eventReception(offset int, event *eventData) {
+func (a *AggDataPerObject) eventReception(offset int64, event *eventData) {
 	a.incomingCh <- eventForAgg{
 		offset:    offset,
 		eventData: event,
