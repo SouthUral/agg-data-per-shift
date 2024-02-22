@@ -12,6 +12,7 @@ type AggDataPerObject struct {
 	shiftData     shiftObjData            // данные за смену
 	lastOffset    int64                   // последний offset загруженный в БД
 	incomingCh    chan eventForAgg        // канал для получения событий
+	storageCh     chan interface{}        // канал для связи с модулем работающем с БД
 	cancel        func()                  // функция для завршения конекста
 	settingsShift *settingsDurationShifts // настройки смены, меняются централизованно
 }
@@ -75,4 +76,30 @@ func (a *AggDataPerObject) eventReception(offset int64, event *eventData) {
 		offset:    offset,
 		eventData: event,
 	}
+}
+
+// метод восстановления состояния
+func (a *AggDataPerObject) restoringState() {
+	// TODO: нужно отправить в sotrage запрос на восстановление состояния
+	// Данные, которые будут переданы в запросе это objectID техники
+	// Данные, которые должны быть получены:
+	// - строка из таблицы Смены
+	// - строка из таблицы Сессий водителей
+	// если данных не будет, то далее будут созданы новые сессия и смена
+}
+
+// метод создания новых объектов (создается смена и сессия)
+func (a *AggDataPerObject) createNewObjects() {
+	// получение  id смены и id сессии
+
+}
+
+// метод создания сессии
+func (a *AggDataPerObject) createSession() {
+	// получение id сессии
+}
+
+// обновление объектов (смены и сессии)
+func (a *AggDataPerObject) updateObjects() {
+	// метод не возвращает никаких данных
 }

@@ -79,7 +79,7 @@ type eventData struct {
 	mesTime     time.Time // время сообщения
 	mileage     int       // пробег
 	gpsMileage  int       // пробег по gps
-	engineHours float64   // моточасыx
+	engineHours float64   // моточасы
 	fioDriver   string    // ФИО водителя
 	numDriver   int       // номер водителя
 }
