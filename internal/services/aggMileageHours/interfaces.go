@@ -12,7 +12,7 @@ type incomingMessage interface {
 // интерфейс сообщения от модуля storage
 type incomingMessageFromStorage interface {
 	GetDataShift() interface{}         // возвращает интерфейс, который потом нужно привести к интерфейсу dataShiftFromStorage
-	GetDataDriverSession() interface{} // возвращает интерфейс, который потом нужно привести к интерфейсу
+	GetDataDriverSession() interface{} // возвращает интерфейс, который потом нужно привести к интерфейсу dataDriverSessionFromStorage
 }
 
 // данные смены (используются при восстановлении состояния)

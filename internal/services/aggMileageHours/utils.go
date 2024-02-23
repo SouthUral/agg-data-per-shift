@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	log "github.com/sirupsen/logrus"
 )
 
 // функция преобразования []byte во внутреннюю структуру eventData
@@ -12,8 +14,10 @@ func decodingMessage(msg []byte) (*eventData, error) {
 	var eventData *eventData
 
 	data := &rawEventData{}
-
+	start := time.Now()
 	err := json.Unmarshal(msg, data)
+	duration := time.Since(start)
+	log.Debugf("время преобразования %d", duration.Microseconds())
 	if err != nil {
 		err = fmt.Errorf("%w: %w", unmarshalingJsonError{}, err)
 		return eventData, err

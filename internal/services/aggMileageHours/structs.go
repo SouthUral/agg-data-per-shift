@@ -83,3 +83,9 @@ type eventData struct {
 	fioDriver   string    // ФИО водителя
 	numDriver   int       // номер водителя
 }
+
+// стукрура содержащая сконвертированные интерфейсы ответа от модуля storage
+type storageAnswerData struct {
+	shiftData         dataShiftFromStorage
+	driverSessionData dataDriverSessionFromStorage
+}
