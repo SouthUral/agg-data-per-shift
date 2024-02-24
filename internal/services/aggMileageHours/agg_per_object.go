@@ -11,7 +11,8 @@ import (
 // структура в которой происходят процессы агрегации данных на объект техники
 type AggDataPerObject struct {
 	objectId                int                     // objectId техники
-	shiftData               shiftObjData            // данные за смену
+	shiftCurrentData        shiftObjData            // данные за текущую смену
+	sessionCurrentData      sessionDriverData       // данные текущей сессии водителя
 	lastOffset              int64                   // последний offset загруженный в БД
 	incomingCh              chan eventForAgg        // канал для получения событий
 	storageCh               chan interface{}        // канал для связи с модулем работающем с БД
@@ -62,7 +63,8 @@ func (a *AggDataPerObject) gettingEvents(ctx context.Context) {
 				// если состояние не восстановлено (объект был только что создан) то восстанавливаем состояние
 				// на время восстановления горутина блокируется, сообщения собираются в канале
 				if !a.stateRestored {
-					a.restoringState(ctx)
+					err := a.restoringState(ctx)
+					log.Error(err)
 				}
 				a.eventHandling(msg.eventData)
 			}
@@ -89,29 +91,26 @@ func (a *AggDataPerObject) eventReception(offset int64, event *eventData) {
 
 // метод восстановления состояния
 func (a *AggDataPerObject) restoringState(ctx context.Context) error {
-	// TODO: нужно отправить в sotrage запрос на восстановление состояния
-	// Данные, которые будут переданы в запросе это objectID техники
-	// Данные, которые должны быть получены:
-	// - строка из таблицы Смены
-	// - строка из таблицы Сессий водителей
-	// если данных не будет, то далее будут созданы новые сессия и смена
 	mes := mesForStorage{
 		typeMes:  restoreShiftDataPerObj,
 		objectID: a.objectId,
 	}
 
 	answer, err := a.sendingMesToStorage(ctx, mes, a.timeWaitResponseStorage)
-	// TODO: нужна обработка ошибки
 	if err != nil {
+		err = fmt.Errorf("%w: %w", restoringStateError{}, err)
 		return err
 	}
 
-	answerData, err := a.typeConversionAnswerStorage(answer)
+	answerData, err := сonversionAnswerStorage(answer)
 	if err != nil {
+		err = fmt.Errorf("%w: %w", restoringStateError{}, err)
 		return err
 	}
-	// TODO: теперь нужно перенести все данные из интерфейсов во внутренние структуры сессии и смены
 
+	a.loadingStorageData(answerData)
+
+	return err
 }
 
 // метод создания новых объектов (создается смена и сессия)
@@ -151,31 +150,8 @@ func (a *AggDataPerObject) sendingMesToStorage(ctx context.Context, mes mesForSt
 	}
 }
 
-// метод для преобразования ответа от модуля storage
-func (a *AggDataPerObject) typeConversionAnswerStorage(answer interface{}) (storageAnswerData, error) {
-	var err error
-	convertedStorageData := storageAnswerData{}
-
-	storageAnswer, err := typeConversion[incomingMessageFromStorage](answer)
-	if err != nil {
-		err = fmt.Errorf("%w: %w", typeConversionAnswerStorageDataError{}, err)
-		return convertedStorageData, err
-	}
-
-	dataShift, err := typeConversion[dataShiftFromStorage](storageAnswer.GetDataShift())
-	if err != nil {
-		err = fmt.Errorf("%w: %w", typeConversionAnswerStorageDataError{}, err)
-		return convertedStorageData, err
-	}
-	convertedStorageData.shiftData = dataShift
-
-	dataDriverSession, err := typeConversion[dataDriverSessionFromStorage](storageAnswer.GetDataDriverSession())
-	if err != nil {
-		err = fmt.Errorf("%w: %w", typeConversionAnswerStorageDataError{}, err)
-		return convertedStorageData, err
-	}
-
-	convertedStorageData.driverSessionData = dataDriverSession
-
-	return convertedStorageData, err
+// метод загружает данные полученные из storage интерфейсов в локальные структуры
+func (a *AggDataPerObject) loadingStorageData(data storageAnswerData) {
+	a.sessionCurrentData = data.driverSessionData
+	a.shiftCurrentData = data.shiftData
 }

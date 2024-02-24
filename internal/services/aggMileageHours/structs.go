@@ -1,6 +1,7 @@
 package aggmileagehours
 
 import (
+	"fmt"
 	"time"
 )
 
@@ -18,23 +19,143 @@ type settingShift struct {
 
 // данные смены по объекту техники
 type shiftObjData struct {
-	id                  int         // id текущей смены
-	numShift            int         // номер смены (1/2....n)
-	currentShiftDate    time.Time   // текущая дата смены
-	currentDriverId     int         // id текущего водителя техники (может меняться в пределах смены)
-	loaded              bool        // находится ли техника в груженом состоянии
-	motoHoursStartShift float64     // моточасы на начало смены
-	motoHoursCurrent    float64     // текущие моточасы
-	mileageData         mileageData // данные по пробегу за смену
-	mileageGPSData      mileageData // данные по пробегу по GPS за смену
+	id               int         // id текущей смены
+	numShift         int         // номер смены (1/2....n)
+	currentShiftDate time.Time   // текущая дата смены
+	updatedTime      time.Time   // время обновления смены
+	offset           int         // offset события, которое последнее обновило состояние смены
+	currentDriverId  int         // id текущего водителя техники (может меняться в пределах смены)
+	loaded           bool        // находится ли техника в груженом состоянии
+	engHoursData     engHours    // данные по моточасам за смену
+	mileageData      mileageData // данные по пробегу за смену
+	mileageGPSData   mileageData // данные по пробегу по GPS за смену
 }
 
-// данные по пробегу за смену
+// метод для загрузки данных в структуру из интерфеса
+func (s *shiftObjData) loadingInterfaceData(interfaceData interface{}) error {
+	dataShift, err := typeConversion[dataShiftFromStorage](interfaceData)
+	if err != nil {
+		err = fmt.Errorf("%w: %w", interfaceLoadingToStructError{"shiftObjData"}, err)
+		return err
+	}
+
+	s.id = dataShift.GetShiftId()
+	s.numShift = dataShift.GetShiftNum()
+	s.currentShiftDate = dataShift.GetShiftDate()
+	s.updatedTime = dataShift.GetUpdatedTime()
+	s.offset = dataShift.GetOffset()
+	s.loaded = dataShift.GetStatusLoaded()
+
+	err = s.engHoursData.loadingInterfaceData(dataShift.GetEngHoursData())
+	if err != nil {
+		err = fmt.Errorf("%w: %w", interfaceLoadingToStructError{"shiftObjData"}, err)
+		return err
+	}
+	err = s.mileageData.loadingInterfaceData(dataShift.GetMileageData())
+	if err != nil {
+		err = fmt.Errorf("%w: %w", interfaceLoadingToStructError{"shiftObjData"}, err)
+		return err
+	}
+	err = s.mileageGPSData.loadingInterfaceData(dataShift.GetMileageGPSData())
+	if err != nil {
+		err = fmt.Errorf("%w: %w", interfaceLoadingToStructError{"shiftObjData"}, err)
+		return err
+	}
+
+	return err
+}
+
+// данные по пробегу за смену/сессию
 type mileageData struct {
-	mileageStartShift int // пробег на начало смены
-	mileageCurrent    int // текущий пробег
-	mileageLoaded     int // пробег в груженом состоянии
-	mileageEmpty      int // пробег в порожнем состоянии
+	mileageStart   int // пробег на начало (смены/сессии)
+	mileageCurrent int // текущий пробег
+	mileageEnd     int // проебег на конец смены
+	mileageLoaded  int // пробег в груженом состоянии
+	mileageEmpty   int // пробег в порожнем состоянии
+}
+
+// метод переброса данных из интерфейса в структуру
+func (m *mileageData) loadingInterfaceData(interfaceData interface{}) error {
+	mileageInterface, err := typeConversion[mileageDataInterface](interfaceData)
+	if err != nil {
+		err = fmt.Errorf("%w: %w", interfaceLoadingToStructError{"mileageData"}, err)
+		return err
+	}
+
+	m.mileageStart = mileageInterface.GetMileageStart()
+	m.mileageEnd = mileageInterface.GetMileageEnd()
+	m.mileageCurrent = mileageInterface.GetMileageCurrent()
+	m.mileageLoaded = mileageInterface.GetMileageLoaded()
+	m.mileageEmpty = mileageInterface.GetMileageEmpty()
+
+	return err
+}
+
+// данные по моточасам за смену/сессию
+type engHours struct {
+	engHoursStart   float64 // моточасы на начало
+	engHoursCurrent float64 // последняя обновленноая запись моточасов
+	engHoursEnd     float64 // моточасы на конец
+}
+
+// метод переброса данных из интерфейса в структуру
+func (e *engHours) loadingInterfaceData(interfaceData interface{}) error {
+	engHoursInterface, err := typeConversion[engHoursDataInterface](interfaceData)
+	if err != nil {
+		err = fmt.Errorf("%w: %w", interfaceLoadingToStructError{"engHours"}, err)
+		return err
+	}
+
+	e.engHoursStart = engHoursInterface.GetEngHoursStart()
+	e.engHoursEnd = engHoursInterface.GetEngHoursEnd()
+	e.engHoursCurrent = engHoursInterface.GetEngHoursCurrent()
+
+	return err
+}
+
+// данные по сессии водителя в смене
+type sessionDriverData struct {
+	sessionId         int         // id сессии, берется из БД
+	offset            int         // последний записанный offset
+	timeStartSession  time.Time   // время старта сессии
+	timeUpdateSession time.Time   // время обновления записи сессии
+	avSpeed           float64     // средняя скорость водителя
+	engHoursData      engHours    // данные по моточасам за сессию
+	mileageData       mileageData // данные по пробегу за смену
+	mileageGPSData    mileageData // данные пробега по GPS за сессию
+}
+
+// метод для загрузки данных в структуру из интерфеса
+func (s *sessionDriverData) loadingInterfaceData(interfaceData interface{}) error {
+	dataDriverSession, err := typeConversion[dataDriverSessionFromStorage](interfaceData)
+	if err != nil {
+		err = fmt.Errorf("%w: %w", interfaceLoadingToStructError{"sessionDriverData"}, err)
+		return err
+	}
+
+	s.sessionId = dataDriverSession.GetSessionId()
+	s.offset = dataDriverSession.GetOffset()
+	s.timeStartSession = dataDriverSession.GetStartSession()
+	s.timeUpdateSession = dataDriverSession.GetUpdatedTime()
+	s.avSpeed = dataDriverSession.GetAvSpeed()
+
+	err = s.engHoursData.loadingInterfaceData(dataDriverSession.GetEngHoursData())
+	if err != nil {
+		err = fmt.Errorf("%w: %w", interfaceLoadingToStructError{"sessionDriverData"}, err)
+		return err
+	}
+	err = s.mileageData.loadingInterfaceData(dataDriverSession.GetMileageData())
+	if err != nil {
+		err = fmt.Errorf("%w: %w", interfaceLoadingToStructError{"sessionDriverData"}, err)
+		return err
+	}
+	err = s.mileageGPSData.loadingInterfaceData(dataDriverSession.GetMileageGPSData())
+	if err != nil {
+		err = fmt.Errorf("%w: %w", interfaceLoadingToStructError{"sessionDriverData"}, err)
+		return err
+	}
+
+	return err
 }
 
 // данные которые получили из события
@@ -86,6 +207,6 @@ type eventData struct {
 
 // стукрура содержащая сконвертированные интерфейсы ответа от модуля storage
 type storageAnswerData struct {
-	shiftData         dataShiftFromStorage
-	driverSessionData dataDriverSessionFromStorage
+	shiftData         shiftObjData
+	driverSessionData sessionDriverData
 }

@@ -50,3 +50,29 @@ func timeConversion(date string) (time.Time, error) {
 	resTime, err := time.Parse(timeLayOut, timeToFormat)
 	return resTime, err
 }
+
+// функция для преобразования ответа от модуля storage во интерфейсы модуля
+func сonversionAnswerStorage(answer interface{}) (storageAnswerData, error) {
+	var err error
+	convertedStorageData := storageAnswerData{}
+
+	storageAnswer, err := typeConversion[incomingMessageFromStorage](answer)
+	if err != nil {
+		err = fmt.Errorf("%w: %w", typeConversionAnswerStorageDataError{}, err)
+		return convertedStorageData, err
+	}
+
+	err = convertedStorageData.shiftData.loadingInterfaceData(storageAnswer.GetDataShift())
+	if err != nil {
+		err = fmt.Errorf("%w: %w", typeConversionAnswerStorageDataError{}, err)
+		return convertedStorageData, err
+	}
+
+	err = convertedStorageData.driverSessionData.loadingInterfaceData(storageAnswer.GetDataDriverSession())
+	if err != nil {
+		err = fmt.Errorf("%w: %w", typeConversionAnswerStorageDataError{}, err)
+		return convertedStorageData, err
+	}
+
+	return convertedStorageData, err
+}

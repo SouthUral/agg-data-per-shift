@@ -18,27 +18,15 @@ type incomingMessageFromStorage interface {
 // данные смены (используются при восстановлении состояния)
 type dataShiftFromStorage interface {
 	GetShiftId() int           // возвращает Id смены (индентификатор в таблице БД)
+	GetShiftNum() int          // возвращает номер смены
 	GetOffset() int            // offset последнего события, которое было применено к смене
 	GetUpdatedTime() time.Time // время последнего обновления (пока под вопросом)
 	GetShiftDate() time.Time   // возвращает дату смены
+	GetStatusLoaded() bool     // груженый или нет (показатель всегда на послденее обновление записи)
 
-	GetEngHoursStart() float64   // моточасы на начало смены
-	GetEngHoursCurrent() float64 // показатель моточасов на последнее обновление записи
-	GetEngHoursEnd() float64     // моточасы на конец смены
-
-	GetMileageStart() int   // пробег на начало смены
-	GetMileageCurrent() int // пробег на последнее обновление записи
-	GetMileageEnd() int     // пробег на конец смены
-
-	GetMileageLoaded() int // пробег груженым
-
-	GetMileageGPSStart() int   // пробег по GPS начало смены
-	GetMileageGPSCurrent() int // пробег по GPS на последнее обновление записи
-	GetMileageGPSEnd() int     // пробег по GPS на конец смены
-
-	GetMileageGPSLoaded() int // пробег груженым по GPS
-
-	GetStatusLoaded() bool // груженый или нет (показатель всегда на послденее обновление записи)
+	GetEngHoursData() interface{}   // получение интерфейса к данным о моточасах за смену
+	GetMileageData() interface{}    // получение интерфейса к данным пробега за смену
+	GetMileageGPSData() interface{} // получение интерфейса к данным пробега по GPS за смену
 }
 
 // данные текущей сессии водителя, в текущей смене (последней обновленной смене)
@@ -50,19 +38,23 @@ type dataDriverSessionFromStorage interface {
 
 	GetAvSpeed() float64 // средняя скорость водителя в сессии
 
-	GetEngHoursStartSession() float64 // моточасы на начало сессии
-	GetEngHoursCurrent() float64      // последний обновленный показатель моточасов
-	GetEngHoursEndSession() float64   // моточасы на конец сессии
+	GetEngHoursData() interface{}   // получение интерфейса к данным о моточасах за сессию
+	GetMileageData() interface{}    // получение интерфейса к данным пробега за сессию
+	GetMileageGPSData() interface{} // получение интерфейса к данным пробега по GPS за сессию
+}
 
-	GetMileageStartSession() int // пробег на начало сессии
-	GetMileageCurrent() int      // последний обновленный пробег
-	GetMileageEndSession() int   //  пробег на конец сессии
+// интерфейс получения данных о моточасах
+type engHoursDataInterface interface {
+	GetEngHoursStart() float64   // моточасы на начало смены/сессии
+	GetEngHoursCurrent() float64 // последний обновленный показатель моточасов
+	GetEngHoursEnd() float64     // моточасы на конец смены/сессии
+}
 
-	GetMileageLoaded() int // пробег груженым во время сессии
-
-	GetMileageGPSStartSession() int // пробег по GPS на начало сессии
-	GetMileageGPSCurrent() int      // последний обновленный пробег по GPS
-	GetMileageGPSEndSession() int   //  пробег по GPS на конец сессии
-
-	GetMileageGPSLoaded() int // пробег по GPS груженым во время сессии
+// интерфейс получения данных о пробеге
+type mileageDataInterface interface {
+	GetMileageStart() int   // пробег на начало смены/сессии
+	GetMileageCurrent() int // пробег на последнее обновление записи
+	GetMileageEnd() int     // пробег на конец смены/сессии
+	GetMileageLoaded() int  // пробег груженым
+	GetMileageEmpty() int   // пробег порожним
 }

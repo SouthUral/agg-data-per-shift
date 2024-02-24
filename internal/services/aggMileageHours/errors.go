@@ -1,5 +1,7 @@
 package aggmileagehours
 
+import "fmt"
+
 // ошибка десериализации json
 type unmarshalingJsonError struct {
 }
@@ -54,4 +56,21 @@ type contextAggPerObjectClosedError struct {
 
 func (e contextAggPerObjectClosedError) Error() string {
 	return "the AggDataPerObject context has been closed"
+}
+
+// ошибка преобразования интерфейса в указанную структуру
+type interfaceLoadingToStructError struct {
+	structName string
+}
+
+func (e interfaceLoadingToStructError) Error() string {
+	return fmt.Sprintf("%s interface loading error", e.structName)
+}
+
+// ошибка восстановления состояния AggDataPerObject
+type restoringStateError struct {
+}
+
+func (e restoringStateError) Error() string {
+	return "restoring state AggDataPerObject error"
 }
