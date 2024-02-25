@@ -2,11 +2,23 @@ package aggmileagehours
 
 import (
 	"fmt"
+	"sync"
 	"time"
 )
 
+func initSettingsDurationShifts(offsetTimeShift int) *settingsDurationShifts {
+	res := &settingsDurationShifts{
+		mx:              sync.RWMutex{},
+		shifts:          make(map[int]settingShift),
+		offsetTimeShift: offsetTimeShift,
+	}
+
+	return res
+}
+
 // настройки смены
 type settingsDurationShifts struct {
+	mx              sync.RWMutex
 	shifts          map[int]settingShift
 	offsetTimeShift int // времянное смещение смены
 }
@@ -17,18 +29,40 @@ type settingShift struct {
 	shiftDuration  int       // продолжительность смены
 }
 
+// метод для определения номера и даты смены
+func (s settingsDurationShifts) defineShift(dateEvent time.Time) (int, time.Time, error) {
+	var numShift int
+	var dateShift time.Time
+	var err error
+
+	s.mx.RLock()
+	for numShift, shiftSettings := range s.shifts {
+		startShift := shiftSettings.startTimeShift.Add(-time.Duration(s.offsetTimeShift) * time.Hour)
+		endShift := startShift.Add(time.Duration(shiftSettings.shiftDuration) * time.Hour)
+		if dateEvent.After(startShift) && dateEvent.Before(endShift) {
+			// дата смены равна дате окончанию смены  т.к. смена может начинаться вечером в прошлый день
+			return numShift, endShift, err
+		}
+	}
+	defer s.mx.RUnlock()
+
+	err = defineShiftError{}
+
+	return numShift, dateShift, err
+}
+
 // данные смены по объекту техники
 type shiftObjData struct {
-	id               int         // id текущей смены
-	numShift         int         // номер смены (1/2....n)
-	currentShiftDate time.Time   // текущая дата смены
-	updatedTime      time.Time   // время обновления смены
-	offset           int         // offset события, которое последнее обновило состояние смены
-	currentDriverId  int         // id текущего водителя техники (может меняться в пределах смены)
-	loaded           bool        // находится ли техника в груженом состоянии
-	engHoursData     engHours    // данные по моточасам за смену
-	mileageData      mileageData // данные по пробегу за смену
-	mileageGPSData   mileageData // данные по пробегу по GPS за смену
+	id              int         // id текущей смены
+	numShift        int         // номер смены (1/2....n)
+	shiftDate       time.Time   // текущая дата смены
+	updatedTime     time.Time   // время обновления смены
+	offset          int         // offset события, которое последнее обновило состояние смены
+	currentDriverId int         // id текущего водителя техники (может меняться в пределах смены)
+	loaded          bool        // находится ли техника в груженом состоянии
+	engHoursData    engHours    // данные по моточасам за смену
+	mileageData     mileageData // данные по пробегу за смену
+	mileageGPSData  mileageData // данные по пробегу по GPS за смену
 }
 
 // метод для загрузки данных в структуру из интерфеса
@@ -41,7 +75,7 @@ func (s *shiftObjData) loadingInterfaceData(interfaceData interface{}) error {
 
 	s.id = dataShift.GetShiftId()
 	s.numShift = dataShift.GetShiftNum()
-	s.currentShiftDate = dataShift.GetShiftDate()
+	s.shiftDate = dataShift.GetShiftDate()
 	s.updatedTime = dataShift.GetUpdatedTime()
 	s.offset = dataShift.GetOffset()
 	s.loaded = dataShift.GetStatusLoaded()
@@ -63,6 +97,11 @@ func (s *shiftObjData) loadingInterfaceData(interfaceData interface{}) error {
 	}
 
 	return err
+}
+
+// метод сравнивает номер и дату смены с номером и датой переданных в параметрах
+func (s *shiftObjData) checkDateNumCurrentShift(numShift int, dateShift time.Time) bool {
+	return s.numShift == numShift && comparingDates(s.shiftDate, dateShift)
 }
 
 // данные по пробегу за смену/сессию
@@ -116,6 +155,7 @@ func (e *engHours) loadingInterfaceData(interfaceData interface{}) error {
 // данные по сессии водителя в смене
 type sessionDriverData struct {
 	sessionId         int         // id сессии, берется из БД
+	driverId          int         // id водителя
 	offset            int         // последний записанный offset
 	timeStartSession  time.Time   // время старта сессии
 	timeUpdateSession time.Time   // время обновления записи сессии
@@ -134,6 +174,7 @@ func (s *sessionDriverData) loadingInterfaceData(interfaceData interface{}) erro
 	}
 
 	s.sessionId = dataDriverSession.GetSessionId()
+	s.driverId = dataDriverSession.GetDriverId()
 	s.offset = dataDriverSession.GetOffset()
 	s.timeStartSession = dataDriverSession.GetStartSession()
 	s.timeUpdateSession = dataDriverSession.GetUpdatedTime()
@@ -156,6 +197,11 @@ func (s *sessionDriverData) loadingInterfaceData(interfaceData interface{}) erro
 	}
 
 	return err
+}
+
+// метод сравнивает входящий параметр id водителя с текущим id водителя
+func (s *sessionDriverData) checkDriverSession(idDriver int) bool {
+	return s.driverId == idDriver
 }
 
 // данные которые получили из события

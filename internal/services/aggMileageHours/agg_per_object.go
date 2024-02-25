@@ -65,20 +65,55 @@ func (a *AggDataPerObject) gettingEvents(ctx context.Context) {
 				if !a.stateRestored {
 					err := a.restoringState(ctx)
 					log.Error(err)
+					return
 				}
-				a.eventHandling(msg.eventData)
+				err := a.eventHandling(msg.eventData)
+				if err != nil {
+					log.Error(err)
+					return
+				}
 			}
 		}
 	}
 }
 
 // метод обрабатывает событие:
-func (a *AggDataPerObject) eventHandling(eventData *eventData) {
-	// - TODO: нужно определить в к какой смене относится событие;
-	// - TODO: нужно определить, не поменялся ли водитель на технике;
-	// - TODO:
+func (a *AggDataPerObject) eventHandling(eventData *eventData) error {
+	var err error
+	// TODO: работа с событиями
+	// - нужно определить текущее сообщение относится к полученной смене
+	// если данные события относятся к полученной смене/сессии то записи в БД (по id) будут обновлятсья
+	// - проверка смены (к какой смене относится события)
+	// - проверка сессии (проверка, тот ли водитель сейчас)
+	// - для определения смены нужно сделать запрос к settingsShift (передать туда дату, время события)
+	// - на выходе должны образоваться дата смены и ее номер (если они совпадают с датой смены и номером то это та смена)
+	// - если на выходе получится другая дата или номер смены то нужно создать новый объект смены и сессии
+	// - если проверка смены прошла (смена не поменялась) то следущая идет проверка сессии (просто сравнить id водителя)
 	log.Debugf("%+v, mess_time: %s", eventData, eventData.mesTime)
+	// получение номера и даты смены по времени сообщения
+	numShift, dateShift, err := a.settingsShift.defineShift(eventData.mesTime)
+	if err != nil {
+		return err
+	}
 
+	if !a.shiftCurrentData.checkDateNumCurrentShift(numShift, dateShift) {
+		// если номер смены и дата смены не совпадают с номером и датой текущей смены, то нужно создать новую смену и сессию
+		err = a.createNewObjects(eventData)
+		if err != nil {
+			return err
+		}
+	}
+
+	// если же дата и номер смены совпадают, далее нужно проверить не поменялась ли сессия водителя
+	if !a.sessionCurrentData.checkDriverSession(eventData.numDriver) {
+		// если id не совпадает с текущим то нужно создать новую сессию и обновить данные по смене
+		err = a.createSession(eventData)
+		if err != nil {
+			return err
+		}
+	}
+
+	return err
 }
 
 // метод для отправки события в обработчик
@@ -91,6 +126,7 @@ func (a *AggDataPerObject) eventReception(offset int64, event *eventData) {
 
 // метод восстановления состояния
 func (a *AggDataPerObject) restoringState(ctx context.Context) error {
+	// TODO: примечание, если в БД не было записей, то нужно сгенерировать новую смену и сессию
 	mes := mesForStorage{
 		typeMes:  restoreShiftDataPerObj,
 		objectID: a.objectId,
@@ -109,19 +145,25 @@ func (a *AggDataPerObject) restoringState(ctx context.Context) error {
 	}
 
 	a.loadingStorageData(answerData)
+	a.stateRestored = true
 
 	return err
 }
 
 // метод создания новых объектов (создается смена и сессия)
-func (a *AggDataPerObject) createNewObjects() {
+func (a *AggDataPerObject) createNewObjects(eventData *eventData) error {
 	// получение  id смены и id сессии
+	numShift, dateShift, err := a.settingsShift.defineShift(eventData.mesTime)
+	if err != nil {
+		return err
+	}
 
 }
 
 // метод создания сессии
-func (a *AggDataPerObject) createSession() {
+func (a *AggDataPerObject) createSession(eventData *eventData) error {
 	// получение id сессии
+	return nil
 }
 
 // обновление объектов (смены и сессии)

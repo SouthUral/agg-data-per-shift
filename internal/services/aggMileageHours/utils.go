@@ -76,3 +76,10 @@ func сonversionAnswerStorage(answer interface{}) (storageAnswerData, error) {
 
 	return convertedStorageData, err
 }
+
+// функция сравнивания двух дат
+func comparingDates(dateFirst, dateSecond time.Time) bool {
+	t1 := time.Date(dateFirst.Year(), dateFirst.Month(), dateFirst.Day(), 0, 0, 0, 0, time.Local)
+	t2 := time.Date(dateSecond.Year(), dateSecond.Month(), dateSecond.Day(), 0, 0, 0, 0, time.Local)
+	return t1.Equal(t2)
+}

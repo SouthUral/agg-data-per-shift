@@ -32,6 +32,7 @@ type dataShiftFromStorage interface {
 // данные текущей сессии водителя, в текущей смене (последней обновленной смене)
 type dataDriverSessionFromStorage interface {
 	GetSessionId() int          // id сессии
+	GetDriverId() int           // id водителя
 	GetOffset() int             // offset последнего события, которое было применено к сессии
 	GetStartSession() time.Time // время начала сессии
 	GetUpdatedTime() time.Time  // время последнего обновления сессии

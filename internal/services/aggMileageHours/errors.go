@@ -74,3 +74,11 @@ type restoringStateError struct {
 func (e restoringStateError) Error() string {
 	return "restoring state AggDataPerObject error"
 }
+
+// ошибка определения смены (нет смены)
+type defineShiftError struct {
+}
+
+func (e defineShiftError) Error() string {
+	return "define shift error, there is no shift"
+}
