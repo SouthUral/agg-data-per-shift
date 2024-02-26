@@ -164,12 +164,23 @@ func (a *AggDataPerObject) createNewObjects(ctx context.Context, eventData *even
 	// создается новый объект сессии водителя на основании старой сессии
 	a.sessionCurrentData = a.sessionCurrentData.createNewDriverSession(eventData.numDriver, eventData.mesTime)
 	// если предыдущая смена закончилась с загруженным транспортом то нужно посмотреть, не пришло ли в текущем событии событие разгрузка
+	// так же первым сообщением может быть начало погрузки
+	a.typeEventHandlig(eventData.typeEvent)
 
 	// обновление созданных объектов
 	a.sessionCurrentData.updateSession(eventData, eventOffset, a.shiftCurrentData.loaded)
 	a.shiftCurrentData.updateShiftObjData(eventData, eventOffset, a.shiftCurrentData.loaded)
 
 	// отправить сообщение в модуль storage с данными новой смены и сессии
+	mesForStorage := mesForStorage{
+		typeMes:         addNewShiftAndSession,
+		objectID:        a.objectId,
+		shiftInitData:   initShiftObjTransportData(*a.shiftCurrentData),
+		sessionInitData: initSessionDriverTransportData(*a.sessionCurrentData),
+	}
+
+	answer, err := a.sendingMesToStorage(ctx, mesForStorage, a.timeWaitResponseStorage)
+	// TODO: нужно обработать ответ от модуля storage, нужны id смены и сессии
 	return err
 }
 
@@ -212,4 +223,15 @@ func (a *AggDataPerObject) sendingMesToStorage(ctx context.Context, mes mesForSt
 func (a *AggDataPerObject) loadingStorageData(data storageAnswerData) {
 	a.sessionCurrentData = data.driverSessionData
 	a.shiftCurrentData = data.shiftData
+}
+
+// метод обработки типа события
+func (a *AggDataPerObject) typeEventHandlig(typeEvent string) {
+	switch typeEvent {
+	case "DB_MSG_TYPE_START_LOAD":
+		a.shiftCurrentData.loaded = true
+
+	case "DB_MSG_TYPE_UNLOAD":
+		a.shiftCurrentData.loaded = false
+	}
 }
