@@ -19,7 +19,7 @@ type incomingMessageFromStorage interface {
 type dataShiftFromStorage interface {
 	GetShiftId() int           // возвращает Id смены (индентификатор в таблице БД)
 	GetShiftNum() int          // возвращает номер смены
-	GetOffset() int            // offset последнего события, которое было применено к смене
+	GetOffset() int64          // offset последнего события, которое было применено к смене
 	GetUpdatedTime() time.Time // время последнего обновления (пока под вопросом)
 	GetShiftDate() time.Time   // возвращает дату смены
 	GetStatusLoaded() bool     // груженый или нет (показатель всегда на послденее обновление записи)
@@ -33,7 +33,7 @@ type dataShiftFromStorage interface {
 type dataDriverSessionFromStorage interface {
 	GetSessionId() int          // id сессии
 	GetDriverId() int           // id водителя
-	GetOffset() int             // offset последнего события, которое было применено к сессии
+	GetOffset() int64           // offset последнего события, которое было применено к сессии
 	GetStartSession() time.Time // время начала сессии
 	GetUpdatedTime() time.Time  // время последнего обновления сессии
 
@@ -53,9 +53,10 @@ type engHoursDataInterface interface {
 
 // интерфейс получения данных о пробеге
 type mileageDataInterface interface {
-	GetMileageStart() int   // пробег на начало смены/сессии
-	GetMileageCurrent() int // пробег на последнее обновление записи
-	GetMileageEnd() int     // пробег на конец смены/сессии
-	GetMileageLoaded() int  // пробег груженым
-	GetMileageEmpty() int   // пробег порожним
+	GetMileageStart() int                // пробег на начало смены/сессии
+	GetMileageCurrent() int              // пробег на последнее обновление записи
+	GetMileageEnd() int                  // пробег на конец смены/сессии
+	GetMileageLoaded() int               // пробег груженым
+	GetMileageAtBeginningOfLoading() int // пробег на начало последней погрузки (может быть 0 если на момент чтения данных из БД машина была не грудеженая)
+	GetMileageEmpty() int                // пробег порожним
 }
