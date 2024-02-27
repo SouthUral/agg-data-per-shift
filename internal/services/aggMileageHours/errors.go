@@ -90,3 +90,11 @@ type createNewObjectsError struct {
 func (e createNewObjectsError) Error() string {
 	return "createNewObjects error"
 }
+
+// ошибка при отправке и обработке сообщений от модуля storage
+type processAndSendToStorageError struct {
+}
+
+func (e processAndSendToStorageError) Error() string {
+	return "processAndSendToStorage error"
+}

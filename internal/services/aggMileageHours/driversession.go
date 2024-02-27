@@ -7,6 +7,7 @@ import (
 
 // данные по сессии водителя в смене
 type sessionDriverData struct {
+	shiftId           int          // id смены, в которой находится сессия
 	sessionId         int          // id сессии, берется из БД
 	driverId          int          // id водителя
 	offset            int64        // последний записанный offset
@@ -22,6 +23,10 @@ func (s *sessionDriverData) setSessionId(id int) {
 	s.sessionId = id
 }
 
+func (s *sessionDriverData) setShiftId(id int) {
+	s.shiftId = id
+}
+
 // метод для загрузки данных в структуру из интерфеса
 func (s *sessionDriverData) loadingInterfaceData(interfaceData interface{}) error {
 	dataDriverSession, err := typeConversion[dataDriverSessionFromStorage](interfaceData)
@@ -30,6 +35,7 @@ func (s *sessionDriverData) loadingInterfaceData(interfaceData interface{}) erro
 		return err
 	}
 
+	s.shiftId = dataDriverSession.GetShiftId()
 	s.sessionId = dataDriverSession.GetSessionId()
 	s.driverId = dataDriverSession.GetDriverId()
 	s.offset = dataDriverSession.GetOffset()
@@ -63,6 +69,7 @@ func (s *sessionDriverData) checkDriverSession(idDriver int) bool {
 
 func (s *sessionDriverData) createNewDriverSession(driverId int, mesTime time.Time) *sessionDriverData {
 	newDriverSession := &sessionDriverData{
+		// shiftId записывается уже после добавления новой записи в БД??
 		// sessionId возвращается из БД после создания новой записи
 		// offset записывается при обновлении записи
 		driverId:         driverId,

@@ -73,57 +73,6 @@ func (a *AggDataPerObject) gettingEvents(ctx context.Context) {
 	}
 }
 
-// метод обрабатывает событие:
-func (a *AggDataPerObject) eventHandling(ctx context.Context, eventData *eventData, eventOffset int64) error {
-	var err error
-	// TODO: работа с событиями
-	// - нужно определить текущее сообщение относится к полученной смене
-	// если данные события относятся к полученной смене/сессии то записи в БД (по id) будут обновлятсья
-	// - проверка смены (к какой смене относится события)
-	// - проверка сессии (проверка, тот ли водитель сейчас)
-	// - для определения смены нужно сделать запрос к settingsShift (передать туда дату, время события)
-	// - на выходе должны образоваться дата смены и ее номер (если они совпадают с датой смены и номером то это та смена)
-	// - если на выходе получится другая дата или номер смены то нужно создать новый объект смены и сессии
-	// - если проверка смены прошла (смена не поменялась) то следущая идет проверка сессии (просто сравнить id водителя)
-	log.Debugf("%+v, mess_time: %s", eventData, eventData.mesTime)
-	// получение номера и даты смены по времени сообщения
-	numShift, dateShift, err := a.settingsShift.defineShift(eventData.mesTime)
-	if err != nil {
-		return err
-	}
-
-	if !a.shiftCurrentData.checkDateNumCurrentShift(numShift, dateShift) {
-		// если номер смены и дата смены не совпадают с номером и датой текущей смены, то нужно создать новую смену и сессию
-		err = a.createNewObjects(ctx, eventData, eventOffset)
-		if err != nil {
-			return err
-		}
-	}
-
-	// если же дата и номер смены совпадают, далее нужно проверить не поменялась ли сессия водителя
-	if !a.sessionCurrentData.checkDriverSession(eventData.numDriver) {
-		// если id не совпадает с текущим то нужно создать новую сессию и обновить данные по смене
-		//
-		err = a.createSession(ctx, eventData)
-		if err != nil {
-			return err
-		}
-	}
-
-	// если все проверки пройдены смена и сессия остались теми же, нужно обновить данные в локальных структурах и в БД
-	err = a.updateObjects(ctx, eventData)
-
-	return err
-}
-
-// метод для отправки события в обработчик
-func (a *AggDataPerObject) eventReception(offset int64, event *eventData) {
-	a.incomingCh <- eventForAgg{
-		offset:    offset,
-		eventData: event,
-	}
-}
-
 // метод восстановления состояния
 func (a *AggDataPerObject) restoringState(ctx context.Context) error {
 	// TODO: примечание, если в БД не было записей, то нужно сгенерировать новую смену и сессию
@@ -150,31 +99,92 @@ func (a *AggDataPerObject) restoringState(ctx context.Context) error {
 	return err
 }
 
-// метод создания новых объектов (создается смена и сессия)
-func (a *AggDataPerObject) createNewObjects(ctx context.Context, eventData *eventData, eventOffset int64) error {
+// метод обрабатывает событие:
+func (a *AggDataPerObject) eventHandling(ctx context.Context, eventData *eventData, eventOffset int64) error {
 	var err error
-	// получение  id смены и id сессии из БД
+	typeMes := updateShiftAndSession
+
+	log.Debugf("%+v, mess_time: %s", eventData, eventData.mesTime)
+	// получение номера и даты смены по времени сообщения, для проверки текущей смены объекта
 	numShift, dateShift, err := a.settingsShift.defineShift(eventData.mesTime)
 	if err != nil {
-		err = fmt.Errorf("%w: %w", createNewObjectsError{}, err)
 		return err
 	}
 
+	// если номер смены и дата смены не совпадают с номером и датой текущей смены, то нужно создать новую смену и сессию
+	if !a.shiftCurrentData.checkDateNumCurrentShift(numShift, dateShift) {
+		// получение номера и даты смены
+		typeMes = a.createNewObjects(eventData, numShift, dateShift)
+	}
+
+	// если же дата и номер смены совпадают, далее нужно проверить не поменялась ли сессия водителя
+	if !a.sessionCurrentData.checkDriverSession(eventData.numDriver) {
+		// если id не совпадает с текущим то нужно создать новую сессию и обновить данные по смене
+		typeMes = a.createSession(eventData)
+	}
+
+	// обновление локальных объектов сессии и смены
+	a.updateObjects(eventData, eventOffset)
+
+	// отправка сообщения в модуль storage (события будут обрабатываться по-разному, в зависимости от сообщения typeMes)
+	answerFromStorage, err := a.processAndSendToStorage(ctx, typeMes)
+	if err != nil {
+		return err
+	}
+
+	switch typeMes {
+	case addNewShiftAndSession:
+		a.sessionCurrentData.setSessionId(answerFromStorage.driverSessionData.sessionId)
+		a.sessionCurrentData.setShiftId(answerFromStorage.shiftData.id)
+		a.shiftCurrentData.setShiftId(answerFromStorage.shiftData.id)
+		log.Debug()
+	case updateShiftAndAddNewSession:
+		a.sessionCurrentData.setSessionId(answerFromStorage.driverSessionData.sessionId)
+		log.Debug()
+	case updateShiftAndSession:
+		log.Debug()
+	}
+
+	return err
+}
+
+// метод создания новых объектов (создается смена и сессия)
+func (a *AggDataPerObject) createNewObjects(eventData *eventData, numShift int, dateShift time.Time) string {
+	typeMes := addNewShiftAndSession
 	// создается новый объект смены на основании данных старой смены
 	a.shiftCurrentData = a.shiftCurrentData.createNewShift(numShift, dateShift, eventData.mesTime)
 	// создается новый объект сессии водителя на основании старой сессии
 	a.sessionCurrentData = a.sessionCurrentData.createNewDriverSession(eventData.numDriver, eventData.mesTime)
-	// если предыдущая смена закончилась с загруженным транспортом то нужно посмотреть, не пришло ли в текущем событии событие разгрузка
-	// так же первым сообщением может быть начало погрузки
-	a.typeEventHandlig(eventData.typeEvent)
+	return typeMes
+}
 
-	// обновление созданных объектов
+// метод создания сессии
+func (a *AggDataPerObject) createSession(eventData *eventData) string {
+	// тип сообщения которое будет сформировано для отправки в модуль storage
+	typeMes := updateShiftAndAddNewSession
+	a.sessionCurrentData = a.sessionCurrentData.createNewDriverSession(eventData.numDriver, eventData.mesTime)
+	// установка id текущей смены для новой сессии
+	a.sessionCurrentData.setShiftId(a.shiftCurrentData.id)
+	return typeMes
+}
+
+// метод обновляет объекты сессии и смены данными из событий
+func (a *AggDataPerObject) updateObjects(eventData *eventData, eventOffset int64) {
+	// обработка типа события (смена статуса загрузки)
+	a.typeEventHandlig(eventData.typeEvent)
+	// обновление объектов сессии и смены
 	a.sessionCurrentData.updateSession(eventData, eventOffset, a.shiftCurrentData.loaded)
 	a.shiftCurrentData.updateShiftObjData(eventData, eventOffset, a.shiftCurrentData.loaded)
+}
 
-	// отправить сообщение в модуль storage с данными новой смены и сессии
+// метод отправляет формирует сообщение и отправляет его в модуль storage,
+// далее принимает ответ и конвертирует его во внутренние интерфейсы
+func (a *AggDataPerObject) processAndSendToStorage(ctx context.Context, typeMes string) (storageAnswerData, error) {
+	var err error
+	var answerData storageAnswerData
+
 	mesForStorage := mesForStorage{
-		typeMes:         addNewShiftAndSession,
+		typeMes:         typeMes,
 		objectID:        a.objectId,
 		shiftInitData:   initShiftObjTransportData(*a.shiftCurrentData),
 		sessionInitData: initSessionDriverTransportData(*a.sessionCurrentData),
@@ -182,34 +192,17 @@ func (a *AggDataPerObject) createNewObjects(ctx context.Context, eventData *even
 
 	answer, err := a.sendingMesToStorage(ctx, mesForStorage, a.timeWaitResponseStorage)
 	if err != nil {
-		err = fmt.Errorf("%w: %w", createNewObjectsError{}, err)
-		return err
+		err = fmt.Errorf("%w: %w", processAndSendToStorageError{}, err)
+		return answerData, err
 	}
 
-	answerData, err := сonversionAnswerStorage(answer)
+	answerData, err = сonversionAnswerStorage(answer)
 	if err != nil {
-		err = fmt.Errorf("%w: %w", createNewObjectsError{}, err)
-		return err
+		err = fmt.Errorf("%w: %w", processAndSendToStorageError{}, err)
+		return answerData, err
 	}
 
-	// установка id для смены и сессии
-	a.sessionCurrentData.setSessionId(answerData.driverSessionData.sessionId)
-	a.shiftCurrentData.setShiftId(answerData.shiftData.id)
-	return err
-}
-
-// метод создания сессии
-func (a *AggDataPerObject) createSession(ctx context.Context, eventData *eventData) error {
-	var err error
-	// получение id сессии
-	return err
-}
-
-// обновление объектов (смены и сессии)
-func (a *AggDataPerObject) updateObjects(ctx context.Context, eventData *eventData) error {
-	var err error
-	// метод не возвращает никаких данных
-	return err
+	return answerData, err
 }
 
 // метод отправляет сообщение в модуль storage и ожидает от него ответ, если ответ не успеет прийти за timeWait, то метод вернет ошибку
@@ -247,5 +240,13 @@ func (a *AggDataPerObject) typeEventHandlig(typeEvent string) {
 
 	case "DB_MSG_TYPE_UNLOAD":
 		a.shiftCurrentData.loaded = false
+	}
+}
+
+// метод для отправки события в обработчик
+func (a *AggDataPerObject) eventReception(offset int64, event *eventData) {
+	a.incomingCh <- eventForAgg{
+		offset:    offset,
+		eventData: event,
 	}
 }
