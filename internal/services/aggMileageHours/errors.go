@@ -82,3 +82,11 @@ type defineShiftError struct {
 func (e defineShiftError) Error() string {
 	return "define shift error, there is no shift"
 }
+
+// ошибка при создании новой смены и сессии
+type createNewObjectsError struct {
+}
+
+func (e createNewObjectsError) Error() string {
+	return "createNewObjects error"
+}

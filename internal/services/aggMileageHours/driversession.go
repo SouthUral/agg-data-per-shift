@@ -18,6 +18,10 @@ type sessionDriverData struct {
 	mileageGPSData    *mileageData // данные пробега по GPS за сессию
 }
 
+func (s *sessionDriverData) setSessionId(id int) {
+	s.sessionId = id
+}
+
 // метод для загрузки данных в структуру из интерфеса
 func (s *sessionDriverData) loadingInterfaceData(interfaceData interface{}) error {
 	dataDriverSession, err := typeConversion[dataDriverSessionFromStorage](interfaceData)

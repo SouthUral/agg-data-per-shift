@@ -156,6 +156,7 @@ func (a *AggDataPerObject) createNewObjects(ctx context.Context, eventData *even
 	// получение  id смены и id сессии из БД
 	numShift, dateShift, err := a.settingsShift.defineShift(eventData.mesTime)
 	if err != nil {
+		err = fmt.Errorf("%w: %w", createNewObjectsError{}, err)
 		return err
 	}
 
@@ -180,7 +181,20 @@ func (a *AggDataPerObject) createNewObjects(ctx context.Context, eventData *even
 	}
 
 	answer, err := a.sendingMesToStorage(ctx, mesForStorage, a.timeWaitResponseStorage)
-	// TODO: нужно обработать ответ от модуля storage, нужны id смены и сессии
+	if err != nil {
+		err = fmt.Errorf("%w: %w", createNewObjectsError{}, err)
+		return err
+	}
+
+	answerData, err := сonversionAnswerStorage(answer)
+	if err != nil {
+		err = fmt.Errorf("%w: %w", createNewObjectsError{}, err)
+		return err
+	}
+
+	// установка id для смены и сессии
+	a.sessionCurrentData.setSessionId(answerData.driverSessionData.sessionId)
+	a.shiftCurrentData.setShiftId(answerData.shiftData.id)
 	return err
 }
 

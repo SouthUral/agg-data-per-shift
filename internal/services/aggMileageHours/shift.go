@@ -21,6 +21,10 @@ type shiftObjData struct {
 	mileageGPSData  *mileageData // данные по пробегу по GPS за смену
 }
 
+func (s *shiftObjData) setShiftId(id int) {
+	s.id = id
+}
+
 // метод для загрузки данных в структуру из интерфеса
 func (s *shiftObjData) loadingInterfaceData(interfaceData interface{}) error {
 	dataShift, err := typeConversion[dataShiftFromStorage](interfaceData)
