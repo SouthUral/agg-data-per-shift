@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"sync"
 	"time"
+
+	utils "agg-data-per-shift/pkg/utils"
 )
 
 func initSettingsDurationShifts(offsetTimeShift int) *settingsDurationShifts {
@@ -63,7 +65,7 @@ type mileageData struct {
 
 // метод переброса данных из интерфейса в структуру
 func (m *mileageData) loadingInterfaceData(interfaceData interface{}) error {
-	mileageInterface, err := typeConversion[mileageDataInterface](interfaceData)
+	mileageInterface, err := utils.TypeConversion[mileageDataInterface](interfaceData)
 	if err != nil {
 		err = fmt.Errorf("%w: %w", interfaceLoadingToStructError{"mileageData"}, err)
 		return err
@@ -119,7 +121,7 @@ type engHours struct {
 
 // метод переброса данных из интерфейса в структуру
 func (e *engHours) loadingInterfaceData(interfaceData interface{}) error {
-	engHoursInterface, err := typeConversion[engHoursDataInterface](interfaceData)
+	engHoursInterface, err := utils.TypeConversion[engHoursDataInterface](interfaceData)
 	if err != nil {
 		err = fmt.Errorf("%w: %w", interfaceLoadingToStructError{"engHours"}, err)
 		return err

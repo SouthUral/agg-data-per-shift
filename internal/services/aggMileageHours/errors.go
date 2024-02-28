@@ -10,14 +10,6 @@ func (e unmarshalingJsonError) Error() string {
 	return "unmarshaling json error"
 }
 
-// ошибка приведения типов
-type typeConversionError struct {
-}
-
-func (e typeConversionError) Error() string {
-	return "type conversion error"
-}
-
 // ошибка приведения типа ответа от модуля storage
 type typeConversionAnswerStorageDataError struct {
 }

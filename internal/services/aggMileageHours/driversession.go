@@ -3,6 +3,8 @@ package aggmileagehours
 import (
 	"fmt"
 	"time"
+
+	utils "agg-data-per-shift/pkg/utils"
 )
 
 // данные по сессии водителя в смене
@@ -29,7 +31,7 @@ func (s *sessionDriverData) setShiftId(id int) {
 
 // метод для загрузки данных в структуру из интерфеса
 func (s *sessionDriverData) loadingInterfaceData(interfaceData interface{}) error {
-	dataDriverSession, err := typeConversion[dataDriverSessionFromStorage](interfaceData)
+	dataDriverSession, err := utils.TypeConversion[dataDriverSessionFromStorage](interfaceData)
 	if err != nil {
 		err = fmt.Errorf("%w: %w", interfaceLoadingToStructError{"sessionDriverData"}, err)
 		return err

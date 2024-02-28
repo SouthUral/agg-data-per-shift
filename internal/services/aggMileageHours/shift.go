@@ -3,6 +3,8 @@ package aggmileagehours
 import (
 	"fmt"
 	"time"
+
+	utils "agg-data-per-shift/pkg/utils"
 )
 
 // данные смены по объекту техники
@@ -27,7 +29,7 @@ func (s *shiftObjData) setShiftId(id int) {
 
 // метод для загрузки данных в структуру из интерфеса
 func (s *shiftObjData) loadingInterfaceData(interfaceData interface{}) error {
-	dataShift, err := typeConversion[dataShiftFromStorage](interfaceData)
+	dataShift, err := utils.TypeConversion[dataShiftFromStorage](interfaceData)
 	if err != nil {
 		err = fmt.Errorf("%w: %w", interfaceLoadingToStructError{"shiftObjData"}, err)
 		return err

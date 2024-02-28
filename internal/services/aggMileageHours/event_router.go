@@ -5,6 +5,8 @@ import (
 	"fmt"
 
 	log "github.com/sirupsen/logrus"
+
+	utils "agg-data-per-shift/pkg/utils"
 )
 
 // структура в которой происходит распределение событий по горутинам объектов техники
@@ -41,7 +43,7 @@ func (e *EventRouter) routing(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case msg := <-e.incomingEventCh:
-			message, err := typeConversion[incomingMessage](msg)
+			message, err := utils.TypeConversion[incomingMessage](msg)
 			if err != nil {
 				log.Error(err)
 				e.Shudown(err)

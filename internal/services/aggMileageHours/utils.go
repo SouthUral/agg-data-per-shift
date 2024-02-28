@@ -6,6 +6,8 @@ import (
 	"strings"
 	"time"
 
+	utils "agg-data-per-shift/pkg/utils"
+
 	log "github.com/sirupsen/logrus"
 )
 
@@ -31,18 +33,6 @@ func decodingMessage(msg []byte) (*eventData, error) {
 	return eventData, err
 }
 
-// функция преобразования типа
-func typeConversion[T any](data interface{}) (T, error) {
-	var err error
-
-	conversionData, ok := data.(T)
-	if !ok {
-		err = typeConversionError{}
-	}
-
-	return conversionData, err
-}
-
 func timeConversion(date string) (time.Time, error) {
 	dateSplits := strings.Split(date, ".")
 	dateSplits[1] = dateSplits[1][:3]
@@ -56,7 +46,7 @@ func сonversionAnswerStorage(answer interface{}) (storageAnswerData, error) {
 	var err error
 	convertedStorageData := storageAnswerData{}
 
-	storageAnswer, err := typeConversion[incomingMessageFromStorage](answer)
+	storageAnswer, err := utils.TypeConversion[incomingMessageFromStorage](answer)
 	if err != nil {
 		err = fmt.Errorf("%w: %w", typeConversionAnswerStorageDataError{}, err)
 		return convertedStorageData, err
