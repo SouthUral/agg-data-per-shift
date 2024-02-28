@@ -2,195 +2,98 @@ package psql
 
 import (
 	"context"
-	"fmt"
-	"sync"
+
 	"time"
 
+	utils "agg-data-per-shift/pkg/utils"
+
+	"github.com/jackc/pgx/v5/pgxpool"
 	log "github.com/sirupsen/logrus"
 )
 
-// функция инициализирует подключение к PostgreSQL
-func InitPsql(url string, timeWaitConn, timeWaitCheck, numAttempt, timeOut int) *psql {
+type Psql struct {
+	url        string
+	dbpool     *pgxpool.Pool
+	incomingCh chan interface{}
+	cancel     func()
+}
+
+func InitPsql(url string, waitingTime int) (*Psql, context.Context) {
 	ctx, cancel := context.WithCancel(context.Background())
 
-	conf := configPg{
-		url:           url,
-		timeWaitConn:  timeWaitConn,
-		timeWaitCheck: timeWaitCheck,
-		numAttempt:    numAttempt,
-		timeOut:       timeOut,
+	p := &Psql{
+		cancel: cancel,
 	}
 
-	pq := &psql{
-		cancel:     cancel,
-		conn:       initPgConn(conf),
-		incomingCh: make(chan interface{}),
+	// запуск процесса переподключения
+	go p.processConn(ctx, waitingTime)
+	go p.listenAndServe(ctx)
+
+	return p, ctx
+}
+
+// процесс проверяет подключение к postgres в заданный промежуток
+// если подключения нет то производится попытка подключения
+func (p *Psql) processConn(ctx context.Context, waitingTime int) {
+	defer log.Warning("processConn is closed")
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+			if err := p.checkPool(); err != nil {
+				err = p.connPool(context.TODO())
+				if err != nil {
+					log.Error(err)
+				}
+			}
+			time.Sleep(time.Duration(waitingTime) * time.Second)
+		}
 	}
-
-	go pq.processReceivingEvents(ctx)
-
-	return pq
 }
 
-type psql struct {
-	cancel     func()
-	conn       *pgConn
-	mx         sync.RWMutex
-	incomingCh chan interface{}
+// метод для создания пула коннектов
+func (p *Psql) connPool(ctx context.Context) error {
+	dbpool, err := pgxpool.New(ctx, p.url)
+	if err != nil {
+		return err
+	}
+	p.dbpool = dbpool
+	log.Info("a pool of PostgreSQL connections has been created")
+	return err
 }
 
-func (p *psql) GetCh() chan interface{} {
-	return p.incomingCh
+func (p *Psql) checkPool() error {
+	err := p.dbpool.Ping(context.TODO())
+	return err
 }
 
-// процесс для получения события и ответа на них
-func (p *psql) processReceivingEvents(ctx context.Context) {
-	defer log.Warning("processReceivingEvents has finished executing")
-
+// процесс
+func (p *Psql) listenAndServe(ctx context.Context) {
+	defer log.Warning("listenAndServe is closed")
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case msg := <-p.incomingCh:
-			message, ok := msg.(incomigMessage)
-			if !ok {
-				p.Shutdown(messageConversionError{"psql"})
-				return
-			}
-			p.chooseAction(ctx, message)
-		}
-	}
-}
-
-// метод выбирает действия исходя из типа сообщения и запускает его
-func (p *psql) chooseAction(ctx context.Context, message incomigMessage) {
-	typeMsg := message.GetTypeMessage()
-	switch typeMsg {
-	case GetBatchMessages:
-		go p.getBatchEvents(ctx, message)
-	case GetLastOffset:
-		go p.getLastOffset(ctx, message, 20, 2)
-	case UpdateLastOffset:
-		go p.updateLastOffset(ctx, message)
-	case CleanLastOffset:
-		go p.cleanLastOffset(ctx, message)
-	default:
-		log.Warning(unknownTypeMessageError{typeMsg})
-	}
-}
-
-// процесс получения и отправки данных
-func (p *psql) getBatchEvents(ctx context.Context, msg incomigMessage) {
-	var p1, p2 int // временные параметры
-
-	ch := msg.GetCh()
-
-	p1 = msg.GetParamFirst()
-	p2 = msg.GetParamSecond()
-
-	rows, err := p.conn.RequestRowsEvents(ctx, gettingBundleOfEvents, p1, p2)
-
-	if err != nil {
-		log.Error(err)
-		ch <- AnswerData{
-			err: err,
-		}
-		return
-	}
-
-	numRows := len(rows)
-	// отправка ответа
-	for num, eventData := range rows {
-		rowsLeft := numRows - num + 1
-		ch <- AnswerData{
-			rowsLeft: rowsLeft,
-			data:     eventData,
-		}
-	}
-
-	defer close(ch)
-}
-
-func (p *psql) getLastOffset(ctx context.Context, msg incomigMessage, numAttempt, timeWait int) {
-	ch := msg.GetCh()
-
-	offset, err := func() (int, error) {
-		var offset int
-		var err error
-		for i := 0; i < numAttempt; i++ {
-			offset, err = p.conn.RequestRowInt(ctx, getLastOffset)
+			message, err := utils.TypeConversion[trunsportMes](msg)
 			if err != nil {
-				log.Warningf("retry the request %s", getLastOffset)
-			} else {
-				return offset, err
+				err = utils.Wrapper(listenAndServeError{}, err)
+				p.Shutdown(err)
 			}
-			time.Sleep(time.Duration(timeWait) * time.Second)
+			p.handleRequests(message)
 		}
-		err = fmt.Errorf("%w: %w", requestAttemptsEndedError{}, err)
-		return offset, err
-	}()
-
-	if err != nil {
-		ch <- AnswerData{
-			err: err,
-		}
-		return
 	}
 
-	ch <- AnswerData{
-		data: EventData{
-			Offset: offset,
-		},
-	}
-
-	defer close(ch)
 }
 
-func (p *psql) updateLastOffset(ctx context.Context, msg incomigMessage) {
+// обработчик запросов
+func (p *Psql) handleRequests(message trunsportMes) {
 
-	ch := msg.GetCh()
-
-	p1 := msg.GetParamFirst()
-
-	err := p.conn.UpdateOffset(ctx, updateOffset, p1)
-	if err != nil {
-		ch <- AnswerData{
-			err: err,
-		}
-		return
-	}
-
-	ch <- AnswerData{}
-	defer close(ch)
 }
 
-func (p *psql) cleanLastOffset(ctx context.Context, msg incomigMessage) {
-
-	ch := msg.GetCh()
-
-	err := p.conn.UpdateOffset(ctx, updateOffset, 0)
-	if err != nil {
-		ch <- AnswerData{
-			err: err,
-		}
-		return
-	}
-
-	ch <- AnswerData{}
-	defer close(ch)
-}
-
-// func (p *psql) makeRequest(someFunc func(context.Context, incomigMessage) error, numAttempt int) {
-// 	err := f()
-
-// }
-
-// метод для прекращения работы psql
-//   - err - ошибка, по причине которой была прекращена работа
-func (p *psql) Shutdown(err error) {
-	err = fmt.Errorf("%w: %w", terminationPsqlError{}, err)
-	log.Warning(err)
-	p.conn.Shutdown(err)
-
+// метод прекращает работу модуля psql (завершает все активные горутины, разрывает коннект с БД)
+func (p *Psql) Shutdown(err error) {
+	log.Errorf("psql is terminated for a reason: %s", err)
 	p.cancel()
 }
