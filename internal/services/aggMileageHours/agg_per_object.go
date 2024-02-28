@@ -212,8 +212,14 @@ func (a *AggDataPerObject) sendingMesToStorage(ctx context.Context, mes mesForSt
 
 	ctxTimeOut, _ := context.WithTimeout(context.Background(), time.Duration(timeWait)*time.Second)
 	reverseChannel := make(chan interface{})
-	mes.reverseChannel = reverseChannel
-	a.storageCh <- mes
+
+	transportMes := transportStruct{
+		sender:         nameSender,
+		mesage:         mes,
+		reverseChannel: reverseChannel,
+	}
+
+	a.storageCh <- transportMes
 	select {
 	case <-ctx.Done():
 		err = contextAggPerObjectClosedError{}

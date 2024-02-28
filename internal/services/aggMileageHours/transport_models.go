@@ -167,18 +167,12 @@ type mesForStorage struct {
 	objectID        int
 	shiftInitData   shiftObjTransportData
 	sessionInitData sessionDriverTransportData
-	reverseChannel  chan interface{} // канал для отправки ответа от модуля storage
 	// TODO: данные которые могут быть переданы:
 	// - тип сообщения
 	// - objID техники, для восстановления состояния
 	// - начальные данные для смены
 	// - начальные данные для сессии
 	// - обновление данных, передается только id смены и id сессии
-}
-
-// метод для отправки ответа от модуля storage
-func (m mesForStorage) SendAnswer(answer interface{}) {
-	m.reverseChannel <- answer
 }
 
 // метод для получения типа сообщения
@@ -210,4 +204,24 @@ func (m mesForStorage) GetUpdateShiftData() {
 // метод для получения данных на обновлении сессии
 func (m mesForStorage) GetUpdateSessionData() {
 
+}
+
+// транспортная структура (универсальный интерфейс)
+type transportStruct struct {
+	sender         string           // модуль отправитель сообщения
+	mesage         mesForStorage    // сообщение отправителя
+	reverseChannel chan interface{} // канал для отправки ответа от модуля storage
+}
+
+func (t transportStruct) GetSender() string {
+	return t.sender
+}
+
+func (t transportStruct) GetMesage() interface{} {
+	return t.mesage
+}
+
+// метод для отправки ответа от модуля storage
+func (t transportStruct) SendAnswer(answer interface{}) {
+	t.reverseChannel <- answer
 }
