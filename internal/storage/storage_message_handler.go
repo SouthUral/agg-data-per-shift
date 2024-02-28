@@ -1,4 +1,4 @@
-package psql
+package storage
 
 import (
 	"context"
@@ -51,9 +51,39 @@ func (s *StorageMessageHandler) listenAndServe(ctx context.Context) {
 func (s *StorageMessageHandler) handleRequests(message trunsportMes) {
 	switch message.GetSender() {
 	case aggMileageHours:
-		// обработка сообщений от модуля aggMileageHours
+		go s.handlerMesAggMileageHours(message)
 	default:
 		log.Errorf("unknown sender: %s", message.GetSender())
+	}
+}
+
+// метод обрабатывает сообщение от модуля aggMileageHours
+func (s *StorageMessageHandler) handlerMesAggMileageHours(message trunsportMes) {
+	mes, err := utils.TypeConversion[mesFromAggMileageHours](message.GetMesage())
+	if err != nil {
+		err = utils.Wrapper(handlerMesAggMileageHoursError{}, err)
+		log.Error(err)
+		return
+	}
+
+	switch mes.GetType() {
+	case restoreShiftDataPerObj:
+		// обработка сообщения восстановления состояния
+		// TODO: нужно отправить два запроса в БД (чтобы забрать данные смены и сессии)
+		// дождаться выполнения обоих запросов
+		// ответ от БД преобразовать в структуру (под интерфейс) и отправить обратно
+
+	case addNewShiftAndSession:
+		// обработка сообщения добавление новых смены и сессии
+
+	case updateShiftAndAddNewSession:
+		// обработка сообщения, обновление смены и добавление новой сессии
+
+	case updateShiftAndSession:
+		// обработка сообщения, обновления смены и сессии
+
+	default:
+		log.Error("an unknown message type was received")
 	}
 }
 

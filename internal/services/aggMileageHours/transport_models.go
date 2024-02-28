@@ -167,12 +167,6 @@ type mesForStorage struct {
 	objectID        int
 	shiftInitData   shiftObjTransportData
 	sessionInitData sessionDriverTransportData
-	// TODO: данные которые могут быть переданы:
-	// - тип сообщения
-	// - objID техники, для восстановления состояния
-	// - начальные данные для смены
-	// - начальные данные для сессии
-	// - обновление данных, передается только id смены и id сессии
 }
 
 // метод для получения типа сообщения
@@ -186,24 +180,14 @@ func (m mesForStorage) GetObjID() int {
 }
 
 // метод возвращает начальные данные для смены (данные для добавления новых данных в БД)
-func (m mesForStorage) GetInitialShiftData() interface{} {
+func (m mesForStorage) GetShiftData() interface{} {
 	return m.shiftInitData
 
 }
 
 // метод возвращает начальные данные для сессии (данные для добавления новых данных в БД)
-func (m mesForStorage) GetInitialSessionData() interface{} {
+func (m mesForStorage) GetSessionData() interface{} {
 	return m.sessionInitData
-}
-
-// метод для получения данных на обновление смены
-func (m mesForStorage) GetUpdateShiftData() {
-
-}
-
-// метод для получения данных на обновлении сессии
-func (m mesForStorage) GetUpdateSessionData() {
-
 }
 
 // транспортная структура (универсальный интерфейс)

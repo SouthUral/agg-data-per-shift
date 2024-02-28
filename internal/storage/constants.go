@@ -1,4 +1,4 @@
-package psql
+package storage
 
 const (
 	// отправители сообщений
