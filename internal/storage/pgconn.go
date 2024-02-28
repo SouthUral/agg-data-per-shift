@@ -10,17 +10,19 @@ import (
 
 // структура объекта работы с БД
 type pgConn struct {
-	url    string
-	dbpool *pgxpool.Pool
-	cancel func()
+	url            string
+	timeOutQueryes time.Duration
+	dbpool         *pgxpool.Pool
+	cancel         func()
 }
 
-func initPgConn(url string) *pgConn {
+func initPgConn(url string, timeOutQueryes int) *pgConn {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	p := &pgConn{
-		url:    url,
-		cancel: cancel,
+		url:            url,
+		cancel:         cancel,
+		timeOutQueryes: time.Duration(timeOutQueryes),
 	}
 
 	// запуск процесса мониторинга и подключения к БД

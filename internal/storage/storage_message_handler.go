@@ -20,7 +20,7 @@ func InitPsql(url string, waitingTime int) (*StorageMessageHandler, context.Cont
 
 	s := &StorageMessageHandler{
 		cancel: cancel,
-		dbConn: initPgConn(url),
+		dbConn: initPgConn(url, 10),
 	}
 
 	go s.listenAndServe(ctx)
@@ -71,16 +71,19 @@ func (s *StorageMessageHandler) handlerMesAggMileageHours(message trunsportMes) 
 		// обработка сообщения восстановления состояния
 		// TODO: нужно отправить два запроса в БД (чтобы забрать данные смены и сессии)
 		// дождаться выполнения обоих запросов
+		// ответом будет строка из таблицы смен и строка из таблицы сессий
 		// ответ от БД преобразовать в структуру (под интерфейс) и отправить обратно
-
 	case addNewShiftAndSession:
 		// обработка сообщения добавление новых смены и сессии
+		// ответом будет id смены и id сессии
 
 	case updateShiftAndAddNewSession:
 		// обработка сообщения, обновление смены и добавление новой сессии
+		// ответом будет id сессии
 
 	case updateShiftAndSession:
 		// обработка сообщения, обновления смены и сессии
+		// ответ не нужен (пока)
 
 	default:
 		log.Error("an unknown message type was received")
