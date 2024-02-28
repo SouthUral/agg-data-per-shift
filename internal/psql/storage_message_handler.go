@@ -9,46 +9,46 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-type Psql struct {
+type StorageMessageHandler struct {
 	dbConn     *pgConn
 	incomingCh chan interface{}
 	cancel     func()
 }
 
-func InitPsql(url string, waitingTime int) (*Psql, context.Context) {
+func InitPsql(url string, waitingTime int) (*StorageMessageHandler, context.Context) {
 	ctx, cancel := context.WithCancel(context.Background())
 
-	p := &Psql{
+	s := &StorageMessageHandler{
 		cancel: cancel,
 		dbConn: initPgConn(url),
 	}
 
-	go p.listenAndServe(ctx)
+	go s.listenAndServe(ctx)
 
-	return p, ctx
+	return s, ctx
 }
 
 // процесс получения и обработки сообщений от других модулей
-func (p *Psql) listenAndServe(ctx context.Context) {
+func (s *StorageMessageHandler) listenAndServe(ctx context.Context) {
 	defer log.Warning("listenAndServe is closed")
 	for {
 		select {
 		case <-ctx.Done():
 			return
-		case msg := <-p.incomingCh:
+		case msg := <-s.incomingCh:
 			message, err := utils.TypeConversion[trunsportMes](msg)
 			if err != nil {
 				err = utils.Wrapper(listenAndServeError{}, err)
-				p.Shutdown(err)
+				s.Shutdown(err)
 			}
-			p.handleRequests(message)
+			s.handleRequests(message)
 		}
 	}
 
 }
 
 // обработчик запросов
-func (p *Psql) handleRequests(message trunsportMes) {
+func (s *StorageMessageHandler) handleRequests(message trunsportMes) {
 	switch message.GetSender() {
 	case aggMileageHours:
 		// обработка сообщений от модуля aggMileageHours
@@ -58,8 +58,8 @@ func (p *Psql) handleRequests(message trunsportMes) {
 }
 
 // метод прекращает работу модуля psql (завершает все активные горутины, разрывает коннект с БД)
-func (p *Psql) Shutdown(err error) {
+func (s *StorageMessageHandler) Shutdown(err error) {
 	log.Errorf("psql is terminated for a reason: %s", err)
-	p.cancel()
-	p.dbConn.shutdown(utils.Wrapper(fmt.Errorf("psql is terminated"), err))
+	s.cancel()
+	s.dbConn.shutdown(utils.Wrapper(fmt.Errorf("psql is terminated"), err))
 }
