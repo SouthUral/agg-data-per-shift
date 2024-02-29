@@ -1,0 +1,15 @@
+version: "3.9"
+
+services:
+  pgTest_report_bd:
+    image: postgres:15.5
+    restart: always
+    environment:
+    - POSTGRES_DB=report_bd
+    - POSTGRES_USER=kovalenko
+    - POSTGRES_PASSWORD=kovalenko
+    volumes:
+    - ./pg_dump:/docker-entrypoint-initdb.d
+    # - pgdata:/var/lib/postgresql/data
+    ports:
+    - "5435:5432"
