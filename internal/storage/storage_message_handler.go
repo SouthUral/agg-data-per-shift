@@ -2,6 +2,7 @@ package storage
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
 	utils "agg-data-per-shift/pkg/utils"
@@ -15,7 +16,7 @@ type StorageMessageHandler struct {
 	cancel     func()
 }
 
-func InitPsql(url string, waitingTime int) (*StorageMessageHandler, context.Context) {
+func InitStorageMessageHandler(url string, waitingTime int) (*StorageMessageHandler, context.Context) {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	s := &StorageMessageHandler{
@@ -41,24 +42,24 @@ func (s *StorageMessageHandler) listenAndServe(ctx context.Context) {
 				err = utils.Wrapper(listenAndServeError{}, err)
 				s.Shutdown(err)
 			}
-			s.handleRequests(message)
+			s.handleRequests(ctx, message)
 		}
 	}
 
 }
 
 // обработчик запросов
-func (s *StorageMessageHandler) handleRequests(message trunsportMes) {
+func (s *StorageMessageHandler) handleRequests(ctx context.Context, message trunsportMes) {
 	switch message.GetSender() {
 	case aggMileageHours:
-		go s.handlerMesAggMileageHours(message)
+		go s.handlerMesAggMileageHours(ctx, message)
 	default:
 		log.Errorf("unknown sender: %s", message.GetSender())
 	}
 }
 
 // метод обрабатывает сообщение от модуля aggMileageHours
-func (s *StorageMessageHandler) handlerMesAggMileageHours(message trunsportMes) {
+func (s *StorageMessageHandler) handlerMesAggMileageHours(ctx context.Context, message trunsportMes) {
 	mes, err := utils.TypeConversion[mesFromAggMileageHours](message.GetMesage())
 	if err != nil {
 		err = utils.Wrapper(handlerMesAggMileageHoursError{}, err)
@@ -73,6 +74,7 @@ func (s *StorageMessageHandler) handlerMesAggMileageHours(message trunsportMes) 
 		// дождаться выполнения обоих запросов
 		// ответом будет строка из таблицы смен и строка из таблицы сессий
 		// ответ от БД преобразовать в структуру (под интерфейс) и отправить обратно
+		s.handlerRestoreShiftDataPerObj(ctx, mes.GetObjID())
 	case addNewShiftAndSession:
 		// обработка сообщения добавление новых смены и сессии
 		// ответом будет id смены и id сессии
@@ -88,6 +90,52 @@ func (s *StorageMessageHandler) handlerMesAggMileageHours(message trunsportMes) 
 	default:
 		log.Error("an unknown message type was received")
 	}
+}
+
+// метод производит два ассинхронных запроса на получение строк из БД
+func (s *StorageMessageHandler) handlerRestoreShiftDataPerObj(ctx context.Context, objId int) {
+	chShift := make(chan responseDB)
+	chSession := make(chan responseDB)
+
+	go func() {
+		response, err := s.dbConn.queryDB(getLastObjShift, objId)
+		if err != nil {
+			log.Error(err)
+			return
+		}
+		shiftDBdata, err := convertingQueryRowResultIntoStructure[RowShiftObjData](response)
+		if err != nil {
+			log.Error(err)
+			return
+		}
+		b, err := json.Marshal(shiftDBdata)
+		if err != nil {
+			log.Error(err)
+			return
+		}
+
+		defer func() { chShift <- responseDB{data: b, err: err} }()
+	}()
+
+	go func() {
+		response, err := s.dbConn.queryDB(getLastObjSession, objId)
+		if err != nil {
+			log.Error(err)
+			return
+		}
+		sessionDBData, err := convertingQueryRowResultIntoStructure[RowSessionObjData](response)
+		if err != nil {
+			log.Error(err)
+			return
+		}
+		b, err := json.Marshal(sessionDBData)
+		if err != nil {
+			log.Error(err)
+		}
+
+		defer func() { chSession <- responseDB{data: b, err: err} }()
+	}()
+
 }
 
 // метод прекращает работу модуля psql (завершает все активные горутины, разрывает коннект с БД)

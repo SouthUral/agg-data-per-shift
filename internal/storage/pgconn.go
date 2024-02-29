@@ -4,6 +4,9 @@ import (
 	"context"
 	"time"
 
+	utils "agg-data-per-shift/pkg/utils"
+
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	log "github.com/sirupsen/logrus"
 )
@@ -75,6 +78,18 @@ func (p *pgConn) closePoolConn() {
 	}
 	p.dbpool.Close()
 	log.Info("connection pool is closed")
+}
+
+// метод для запросов в БД (любой запрос, который вернет данные)
+func (p *pgConn) queryDB(query string, args ...any) (pgx.Rows, error) {
+	ctx, _ := context.WithTimeout(context.Background(), p.timeOutQueryes*time.Second)
+
+	rows, err := p.dbpool.Query(ctx, query, args)
+	if err != nil {
+		err = utils.Wrapper(queryDBError{}, err)
+		log.Error(err)
+	}
+	return rows, err
 }
 
 // метод прекращает работу модуля pgConn (завершает все активные горутины, разрывает коннект с БД)

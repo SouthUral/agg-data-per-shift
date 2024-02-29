@@ -14,3 +14,11 @@ type handlerMesAggMileageHoursError struct {
 func (e handlerMesAggMileageHoursError) Error() string {
 	return "error in processing a message from the aggMileageHours module"
 }
+
+// ошибка запроса к БД
+type queryDBError struct {
+}
+
+func (e queryDBError) Error() string {
+	return "query DB error"
+}
