@@ -4,6 +4,7 @@ import (
 	"time"
 )
 
+// интерфейс сообщения от amqp
 type incomingMessage interface {
 	GetOffset() int64
 	GetMsg() []byte

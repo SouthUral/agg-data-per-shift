@@ -21,6 +21,56 @@ type sessionDriverData struct {
 	mileageGPSData    *mileageData // данные пробега по GPS за сессию
 }
 
+// интерфейсный метод
+func (s sessionDriverData) GetShiftId() int {
+	return s.shiftId
+}
+
+// интерфейсный метод
+func (s sessionDriverData) GetSessionId() int {
+	return s.sessionId
+}
+
+// интерфейсный метод
+func (s sessionDriverData) GetDriverId() int {
+	return s.driverId
+}
+
+// интерфейсный метод
+func (s sessionDriverData) GetOffset() int64 {
+	return s.offset
+}
+
+// интерфейсный метод
+func (s sessionDriverData) GetTimeStartSession() time.Time {
+	return s.timeStartSession
+}
+
+// интерфейсный метод
+func (s sessionDriverData) GetTimeUpdateSession() time.Time {
+	return s.timeUpdateSession
+}
+
+// интерфейсный метод
+func (s sessionDriverData) GetAvSpeed() float64 {
+	return s.avSpeed
+}
+
+// интерфейсный метод
+func (s sessionDriverData) GetEngHoursData() interface{} {
+	return s.engHoursData
+}
+
+// интерфейсный метод
+func (s sessionDriverData) GetMileageData() interface{} {
+	return s.mileageData
+}
+
+// интерфейсный метод
+func (s sessionDriverData) GetMileageGPSData() interface{} {
+	return s.mileageGPSData
+}
+
 func (s *sessionDriverData) setSessionId(id int) {
 	s.sessionId = id
 }

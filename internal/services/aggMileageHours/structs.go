@@ -63,6 +63,36 @@ type mileageData struct {
 	mileageEmpty                int // пробег в порожнем состоянии
 }
 
+// интерфейсный метод
+func (m mileageData) GetMileageStart() int {
+	return m.mileageStart
+}
+
+// интерфейсный метод
+func (m mileageData) GetMileageCurrent() int {
+	return m.mileageCurrent
+}
+
+// интерфейсный метод
+func (m mileageData) GetMileageEnd() int {
+	return m.mileageEnd
+}
+
+// интерфейсный метод
+func (m mileageData) GetMileageLoaded() int {
+	return m.mileageLoaded
+}
+
+// интерфейсный метод
+func (m mileageData) GetMileageAtBeginningOfLoading() int {
+	return m.mileageAtBeginningOfLoading
+}
+
+// интерфейсный метод
+func (m mileageData) GetMileageEmpty() int {
+	return m.mileageEmpty
+}
+
 // метод переброса данных из интерфейса в структуру
 func (m *mileageData) loadingInterfaceData(interfaceData interface{}) error {
 	mileageInterface, err := utils.TypeConversion[mileageDataInterface](interfaceData)
@@ -117,6 +147,21 @@ type engHours struct {
 	engHoursStart   float64 // моточасы на начало
 	engHoursCurrent float64 // последняя обновленноая запись моточасов
 	engHoursEnd     float64 // моточасы на конец
+}
+
+// Интерфейсный метод
+func (e engHours) GetEngHoursStart() float64 {
+	return e.engHoursStart
+}
+
+// Интерфейсный метод
+func (e engHours) GetEngHoursCurrent() float64 {
+	return e.engHoursCurrent
+}
+
+// Интерфейсный метод
+func (e engHours) GetEngHoursEnd() float64 {
+	return e.engHoursEnd
 }
 
 // метод переброса данных из интерфейса в структуру

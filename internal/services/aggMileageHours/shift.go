@@ -23,6 +23,66 @@ type shiftObjData struct {
 	mileageGPSData  *mileageData // данные по пробегу по GPS за смену
 }
 
+// интерфейсный метод
+func (s shiftObjData) GetId() int {
+	return s.id
+}
+
+// интерфейсный метод
+func (s shiftObjData) GetNumShift() int {
+	return s.numShift
+}
+
+// интерфейсный метод
+func (s shiftObjData) GetShiftDateStart() time.Time {
+	return s.shiftDateStart
+}
+
+// интерфейсный метод
+func (s shiftObjData) GetShiftDateEnd() time.Time {
+	return s.shiftDateEnd
+}
+
+// интерфейсный метод
+func (s shiftObjData) GetShiftDate() time.Time {
+	return s.shiftDate
+}
+
+// интерфейсный метод
+func (s shiftObjData) GetUpdatedTime() time.Time {
+	return s.updatedTime
+}
+
+// интерфейсный метод
+func (s shiftObjData) GetOffset() int64 {
+	return s.offset
+}
+
+// интерфейсный метод
+func (s shiftObjData) GetCurrentDriverId() int {
+	return s.currentDriverId
+}
+
+// интерфейсный метод
+func (s shiftObjData) GetLoaded() bool {
+	return s.loaded
+}
+
+// интерфейсный метод
+func (s shiftObjData) GetEngHoursData() interface{} {
+	return *s.engHoursData
+}
+
+// интерфейсный метод
+func (s shiftObjData) GetMileageData() interface{} {
+	return *s.mileageData
+}
+
+// интерфейсный метод
+func (s shiftObjData) GetMileageGPSData() interface{} {
+	return *s.mileageGPSData
+}
+
 func (s *shiftObjData) setShiftId(id int) {
 	s.id = id
 }

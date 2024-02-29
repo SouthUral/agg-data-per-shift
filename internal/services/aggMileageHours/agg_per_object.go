@@ -186,8 +186,8 @@ func (a *AggDataPerObject) processAndSendToStorage(ctx context.Context, typeMes 
 	mesForStorage := mesForStorage{
 		typeMes:         typeMes,
 		objectID:        a.objectId,
-		shiftInitData:   initShiftObjTransportData(*a.shiftCurrentData),
-		sessionInitData: initSessionDriverTransportData(*a.sessionCurrentData),
+		shiftInitData:   *a.shiftCurrentData,
+		sessionInitData: *a.sessionCurrentData,
 	}
 
 	answer, err := a.sendingMesToStorage(ctx, mesForStorage, a.timeWaitResponseStorage)
