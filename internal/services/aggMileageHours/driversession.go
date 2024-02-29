@@ -91,8 +91,8 @@ func (s *sessionDriverData) loadingInterfaceData(interfaceData interface{}) erro
 	s.sessionId = dataDriverSession.GetSessionId()
 	s.driverId = dataDriverSession.GetDriverId()
 	s.offset = dataDriverSession.GetOffset()
-	s.timeStartSession = dataDriverSession.GetStartSession()
-	s.timeUpdateSession = dataDriverSession.GetUpdatedTime()
+	s.timeStartSession = dataDriverSession.GetTimeStartSession()
+	s.timeUpdateSession = dataDriverSession.GetTimeUpdateSession()
 	s.avSpeed = dataDriverSession.GetAvSpeed()
 
 	err = s.engHoursData.loadingInterfaceData(dataDriverSession.GetEngHoursData())

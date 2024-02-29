@@ -24,12 +24,12 @@ type shiftObjData struct {
 }
 
 // интерфейсный метод
-func (s shiftObjData) GetId() int {
+func (s shiftObjData) GetShiftId() int {
 	return s.id
 }
 
 // интерфейсный метод
-func (s shiftObjData) GetNumShift() int {
+func (s shiftObjData) GetShiftNum() int {
 	return s.numShift
 }
 
@@ -64,7 +64,7 @@ func (s shiftObjData) GetCurrentDriverId() int {
 }
 
 // интерфейсный метод
-func (s shiftObjData) GetLoaded() bool {
+func (s shiftObjData) GetStatusLoaded() bool {
 	return s.loaded
 }
 
@@ -97,9 +97,12 @@ func (s *shiftObjData) loadingInterfaceData(interfaceData interface{}) error {
 
 	s.id = dataShift.GetShiftId()
 	s.numShift = dataShift.GetShiftNum()
+	s.shiftDateStart = dataShift.GetShiftDateStart()
+	s.shiftDateEnd = dataShift.GetShiftDateEnd()
 	s.shiftDate = dataShift.GetShiftDate()
 	s.updatedTime = dataShift.GetUpdatedTime()
 	s.offset = dataShift.GetOffset()
+	s.currentDriverId = dataShift.GetCurrentDriverId()
 	s.loaded = dataShift.GetStatusLoaded()
 
 	err = s.engHoursData.loadingInterfaceData(dataShift.GetEngHoursData())

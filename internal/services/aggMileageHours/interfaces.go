@@ -18,13 +18,15 @@ type incomingMessageFromStorage interface {
 
 // данные смены (используются при восстановлении состояния)
 type dataShiftFromStorage interface {
-	GetShiftId() int           // возвращает Id смены (индентификатор в таблице БД)
-	GetShiftNum() int          // возвращает номер смены
-	GetOffset() int64          // offset последнего события, которое было применено к смене
-	GetUpdatedTime() time.Time // время последнего обновления (пока под вопросом)
+	GetShiftId() int  // возвращает Id смены (индентификатор в таблице БД)
+	GetShiftNum() int // возвращает номер смены
+	GetShiftDateStart() time.Time
+	GetShiftDateEnd() time.Time
 	GetShiftDate() time.Time   // возвращает дату смены
-	GetStatusLoaded() bool     // груженый или нет (показатель всегда на послденее обновление записи)
-
+	GetUpdatedTime() time.Time // время последнего обновления (пока под вопросом)
+	GetOffset() int64          // offset последнего события, которое было применено к смене
+	GetCurrentDriverId() int
+	GetStatusLoaded() bool          // груженый или нет (показатель всегда на послденее обновление записи)
 	GetEngHoursData() interface{}   // получение интерфейса к данным о моточасах за смену
 	GetMileageData() interface{}    // получение интерфейса к данным пробега за смену
 	GetMileageGPSData() interface{} // получение интерфейса к данным пробега по GPS за смену
@@ -32,12 +34,12 @@ type dataShiftFromStorage interface {
 
 // данные текущей сессии водителя, в текущей смене (последней обновленной смене)
 type dataDriverSessionFromStorage interface {
-	GetShiftId() int            // id смены, в которой находится сессия
-	GetSessionId() int          // id сессии
-	GetDriverId() int           // id водителя
-	GetOffset() int64           // offset последнего события, которое было применено к сессии
-	GetStartSession() time.Time // время начала сессии
-	GetUpdatedTime() time.Time  // время последнего обновления сессии
+	GetShiftId() int                 // id смены, в которой находится сессия
+	GetSessionId() int               // id сессии
+	GetDriverId() int                // id водителя
+	GetOffset() int64                // offset последнего события, которое было применено к сессии
+	GetTimeStartSession() time.Time  // время начала сессии
+	GetTimeUpdateSession() time.Time // время последнего обновления сессии
 
 	GetAvSpeed() float64 // средняя скорость водителя в сессии
 
