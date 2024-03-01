@@ -84,7 +84,7 @@ func (e *EventRouter) getAggObj(objId int) *AggDataPerObject {
 }
 
 func (e *EventRouter) createNewAggObj(objId int) *AggDataPerObject {
-	aggObj, _ := initAggDataPerObject(objId, e.settingShift)
+	aggObj, _ := initAggDataPerObject(objId, e.settingShift, e.storageCh)
 	e.aggObjs[objId] = aggObj
 	return aggObj
 }

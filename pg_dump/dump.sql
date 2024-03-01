@@ -58,6 +58,7 @@ SET default_table_access_method = heap;
 CREATE TABLE reports.drivers_sessions (
     id integer NOT NULL,
     shift_id integer,
+    object_id integer,
     driver_id integer,
     event_offset bigint,
     time_start_session timestamp without time zone,
@@ -112,6 +113,7 @@ ALTER SEQUENCE reports.drivers_sessions_id_seq OWNED BY reports.drivers_sessions
 CREATE TABLE reports.shifts (
     id integer NOT NULL,
     num_shift integer,
+    object_id integer,
     shift_date_start timestamp without time zone,
     shift_date_end timestamp without time zone,
     shift_date timestamp without time zone,

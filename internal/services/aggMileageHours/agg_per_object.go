@@ -11,7 +11,7 @@ import (
 // структура в которой происходят процессы агрегации данных на объект техники
 type AggDataPerObject struct {
 	objectId                int                     // objectId техники
-	shiftCurrentData        *shiftObjData           // данные за текущую смену
+	shiftCurrentData        *ShiftObjData           // данные за текущую смену
 	sessionCurrentData      *sessionDriverData      // данные текущей сессии водителя
 	lastOffset              int64                   // последний offset загруженный в БД
 	incomingCh              chan eventForAgg        // канал для получения событий
@@ -28,7 +28,7 @@ type AggDataPerObject struct {
 // TODO: при инициализации нужно полностью восстановить информацию о смене
 // TODO: горутина сама восстанавливает информацию о смене, после создания она отправляет запрос в БД на восстановление состояния
 
-func initAggDataPerObject(objectId int, settingsShift *settingsDurationShifts) (*AggDataPerObject, context.Context) {
+func initAggDataPerObject(objectId int, settingsShift *settingsDurationShifts, storageCh chan interface{}) (*AggDataPerObject, context.Context) {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	res := &AggDataPerObject{
@@ -36,6 +36,7 @@ func initAggDataPerObject(objectId int, settingsShift *settingsDurationShifts) (
 		incomingCh:    make(chan eventForAgg), // TODO: возможно нужен буферизированный канал, т.к. горутина может неуспеть обработать событие до отправки следующего
 		cancel:        cancel,
 		settingsShift: settingsShift,
+		storageCh:     storageCh,
 	}
 
 	// запуск горутины получения событий
@@ -135,8 +136,8 @@ func (a *AggDataPerObject) eventHandling(ctx context.Context, eventData *eventDa
 	switch typeMes {
 	case addNewShiftAndSession:
 		a.sessionCurrentData.setSessionId(answerFromStorage.driverSessionData.sessionId)
-		a.sessionCurrentData.setShiftId(answerFromStorage.shiftData.id)
-		a.shiftCurrentData.setShiftId(answerFromStorage.shiftData.id)
+		a.sessionCurrentData.setShiftId(answerFromStorage.shiftData.Id)
+		a.shiftCurrentData.setShiftId(answerFromStorage.shiftData.Id)
 		log.Debug()
 	case updateShiftAndAddNewSession:
 		a.sessionCurrentData.setSessionId(answerFromStorage.driverSessionData.sessionId)
@@ -164,7 +165,7 @@ func (a *AggDataPerObject) createSession(eventData *eventData) string {
 	typeMes := updateShiftAndAddNewSession
 	a.sessionCurrentData = a.sessionCurrentData.createNewDriverSession(eventData.numDriver, eventData.mesTime)
 	// установка id текущей смены для новой сессии
-	a.sessionCurrentData.setShiftId(a.shiftCurrentData.id)
+	a.sessionCurrentData.setShiftId(a.shiftCurrentData.Id)
 	return typeMes
 }
 
@@ -173,8 +174,8 @@ func (a *AggDataPerObject) updateObjects(eventData *eventData, eventOffset int64
 	// обработка типа события (смена статуса загрузки)
 	a.typeEventHandlig(eventData.typeEvent)
 	// обновление объектов сессии и смены
-	a.sessionCurrentData.updateSession(eventData, eventOffset, a.shiftCurrentData.loaded)
-	a.shiftCurrentData.updateShiftObjData(eventData, eventOffset, a.shiftCurrentData.loaded)
+	a.sessionCurrentData.updateSession(eventData, eventOffset, a.shiftCurrentData.Loaded)
+	a.shiftCurrentData.updateShiftObjData(eventData, eventOffset, a.shiftCurrentData.Loaded)
 }
 
 // метод отправляет формирует сообщение и отправляет его в модуль storage,
@@ -242,10 +243,10 @@ func (a *AggDataPerObject) loadingStorageData(data storageAnswerData) {
 func (a *AggDataPerObject) typeEventHandlig(typeEvent string) {
 	switch typeEvent {
 	case "DB_MSG_TYPE_START_LOAD":
-		a.shiftCurrentData.loaded = true
+		a.shiftCurrentData.Loaded = true
 
 	case "DB_MSG_TYPE_UNLOAD":
-		a.shiftCurrentData.loaded = false
+		a.shiftCurrentData.Loaded = false
 	}
 }
 

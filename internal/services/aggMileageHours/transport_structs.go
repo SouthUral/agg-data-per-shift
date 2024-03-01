@@ -9,7 +9,7 @@ type eventForAgg struct {
 type mesForStorage struct {
 	typeMes         string
 	objectID        int
-	shiftInitData   shiftObjData
+	shiftInitData   ShiftObjData
 	sessionInitData sessionDriverData
 }
 

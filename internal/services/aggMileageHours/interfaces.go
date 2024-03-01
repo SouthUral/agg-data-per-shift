@@ -12,8 +12,9 @@ type incomingMessage interface {
 
 // интерфейс сообщения от модуля storage
 type incomingMessageFromStorage interface {
-	GetDataShift() interface{}         // возвращает интерфейс, который потом нужно привести к интерфейсу dataShiftFromStorage
-	GetDataDriverSession() interface{} // возвращает интерфейс, который потом нужно привести к интерфейсу dataDriverSessionFromStorage
+	GetDataShift() []byte         // возвращает json, который нужно привести к структуре shiftObjData
+	GetDataDriverSession() []byte // возвращает json, который нужно привести к структуре sessionDriverData
+	GetError() error              // возращает ошибку
 }
 
 // данные смены (используются при восстановлении состояния)

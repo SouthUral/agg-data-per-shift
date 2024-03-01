@@ -1,10 +1,7 @@
 package aggmileagehours
 
 import (
-	"fmt"
 	"time"
-
-	utils "agg-data-per-shift/pkg/utils"
 )
 
 // данные по сессии водителя в смене
@@ -15,60 +12,10 @@ type sessionDriverData struct {
 	offset            int64        // последний записанный offset
 	timeStartSession  time.Time    // время старта сессии
 	timeUpdateSession time.Time    // время обновления записи сессии
-	avSpeed           float64      // средняя скорость водителя
+	avSpeed           float32      // средняя скорость водителя
 	engHoursData      *engHours    // данные по моточасам за сессию
 	mileageData       *mileageData // данные по пробегу за смену
 	mileageGPSData    *mileageData // данные пробега по GPS за сессию
-}
-
-// интерфейсный метод
-func (s sessionDriverData) GetShiftId() int {
-	return s.shiftId
-}
-
-// интерфейсный метод
-func (s sessionDriverData) GetSessionId() int {
-	return s.sessionId
-}
-
-// интерфейсный метод
-func (s sessionDriverData) GetDriverId() int {
-	return s.driverId
-}
-
-// интерфейсный метод
-func (s sessionDriverData) GetOffset() int64 {
-	return s.offset
-}
-
-// интерфейсный метод
-func (s sessionDriverData) GetTimeStartSession() time.Time {
-	return s.timeStartSession
-}
-
-// интерфейсный метод
-func (s sessionDriverData) GetTimeUpdateSession() time.Time {
-	return s.timeUpdateSession
-}
-
-// интерфейсный метод
-func (s sessionDriverData) GetAvSpeed() float64 {
-	return s.avSpeed
-}
-
-// интерфейсный метод
-func (s sessionDriverData) GetEngHoursData() interface{} {
-	return s.engHoursData
-}
-
-// интерфейсный метод
-func (s sessionDriverData) GetMileageData() interface{} {
-	return s.mileageData
-}
-
-// интерфейсный метод
-func (s sessionDriverData) GetMileageGPSData() interface{} {
-	return s.mileageGPSData
 }
 
 func (s *sessionDriverData) setSessionId(id int) {
@@ -80,35 +27,40 @@ func (s *sessionDriverData) setShiftId(id int) {
 }
 
 // метод для загрузки данных в структуру из интерфеса
-func (s *sessionDriverData) loadingInterfaceData(interfaceData interface{}) error {
-	dataDriverSession, err := utils.TypeConversion[dataDriverSessionFromStorage](interfaceData)
+func (s *sessionDriverData) loadingData(data []byte) error {
+	unmData, err := decodingMesFromStorageToStruct[RowSessionObjData](data)
 	if err != nil {
-		err = fmt.Errorf("%w: %w", interfaceLoadingToStructError{"sessionDriverData"}, err)
 		return err
 	}
 
-	s.shiftId = dataDriverSession.GetShiftId()
-	s.sessionId = dataDriverSession.GetSessionId()
-	s.driverId = dataDriverSession.GetDriverId()
-	s.offset = dataDriverSession.GetOffset()
-	s.timeStartSession = dataDriverSession.GetTimeStartSession()
-	s.timeUpdateSession = dataDriverSession.GetTimeUpdateSession()
-	s.avSpeed = dataDriverSession.GetAvSpeed()
+	s.shiftId = unmData.ShiftId
+	s.sessionId = unmData.SessionId
+	s.driverId = unmData.DriverId
+	s.offset = unmData.Offset
+	s.timeStartSession = unmData.TimeStartSession
+	s.timeUpdateSession = unmData.TimeUpdateSession
+	s.avSpeed = unmData.AvSpeed
 
-	err = s.engHoursData.loadingInterfaceData(dataDriverSession.GetEngHoursData())
-	if err != nil {
-		err = fmt.Errorf("%w: %w", interfaceLoadingToStructError{"sessionDriverData"}, err)
-		return err
+	s.engHoursData = &engHours{
+		engHoursStart:   unmData.EngHoursStart,
+		engHoursCurrent: unmData.EngHoursCurrent,
+		engHoursEnd:     unmData.EngHoursEnd,
 	}
-	err = s.mileageData.loadingInterfaceData(dataDriverSession.GetMileageData())
-	if err != nil {
-		err = fmt.Errorf("%w: %w", interfaceLoadingToStructError{"sessionDriverData"}, err)
-		return err
+	s.mileageData = &mileageData{
+		mileageStart:                unmData.MileageStart,
+		mileageEnd:                  unmData.MileageEnd,
+		mileageCurrent:              unmData.MileageCurrent,
+		mileageLoaded:               unmData.MileageLoaded,
+		mileageAtBeginningOfLoading: unmData.MileageAtBeginningOfLoading,
+		mileageEmpty:                unmData.MileageEmpty,
 	}
-	err = s.mileageGPSData.loadingInterfaceData(dataDriverSession.GetMileageGPSData())
-	if err != nil {
-		err = fmt.Errorf("%w: %w", interfaceLoadingToStructError{"sessionDriverData"}, err)
-		return err
+	s.mileageGPSData = &mileageData{
+		mileageStart:                unmData.MileageGPSStart,
+		mileageEnd:                  unmData.MileageGPSEnd,
+		mileageCurrent:              unmData.MileageGPSCurrent,
+		mileageLoaded:               unmData.MileageGPSLoaded,
+		mileageAtBeginningOfLoading: unmData.MileageGPSAtBeginningOfLoading,
+		mileageEmpty:                unmData.MileageGPSEmpty,
 	}
 
 	return err

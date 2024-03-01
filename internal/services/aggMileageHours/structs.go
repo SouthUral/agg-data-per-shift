@@ -1,11 +1,8 @@
 package aggmileagehours
 
 import (
-	"fmt"
 	"sync"
 	"time"
-
-	utils "agg-data-per-shift/pkg/utils"
 )
 
 func initSettingsDurationShifts(offsetTimeShift int) *settingsDurationShifts {
@@ -63,54 +60,6 @@ type mileageData struct {
 	mileageEmpty                int // пробег в порожнем состоянии
 }
 
-// интерфейсный метод
-func (m mileageData) GetMileageStart() int {
-	return m.mileageStart
-}
-
-// интерфейсный метод
-func (m mileageData) GetMileageCurrent() int {
-	return m.mileageCurrent
-}
-
-// интерфейсный метод
-func (m mileageData) GetMileageEnd() int {
-	return m.mileageEnd
-}
-
-// интерфейсный метод
-func (m mileageData) GetMileageLoaded() int {
-	return m.mileageLoaded
-}
-
-// интерфейсный метод
-func (m mileageData) GetMileageAtBeginningOfLoading() int {
-	return m.mileageAtBeginningOfLoading
-}
-
-// интерфейсный метод
-func (m mileageData) GetMileageEmpty() int {
-	return m.mileageEmpty
-}
-
-// метод переброса данных из интерфейса в структуру
-func (m *mileageData) loadingInterfaceData(interfaceData interface{}) error {
-	mileageInterface, err := utils.TypeConversion[mileageDataInterface](interfaceData)
-	if err != nil {
-		err = fmt.Errorf("%w: %w", interfaceLoadingToStructError{"mileageData"}, err)
-		return err
-	}
-
-	m.mileageStart = mileageInterface.GetMileageStart()
-	m.mileageEnd = mileageInterface.GetMileageEnd()
-	m.mileageCurrent = mileageInterface.GetMileageCurrent()
-	m.mileageLoaded = mileageInterface.GetMileageLoaded()
-	m.mileageEmpty = mileageInterface.GetMileageEmpty()
-	m.mileageAtBeginningOfLoading = mileageInterface.GetMileageAtBeginningOfLoading()
-
-	return err
-}
-
 // метод для создания новой структуры mileageData на основании старой
 func (m *mileageData) createNewMileageData() *mileageData {
 	newMileageData := &mileageData{
@@ -144,39 +93,9 @@ func (m *mileageData) updateMileageData(mileage int, objLoaded bool) {
 
 // данные по моточасам за смену/сессию
 type engHours struct {
-	engHoursStart   float64 // моточасы на начало
-	engHoursCurrent float64 // последняя обновленноая запись моточасов
-	engHoursEnd     float64 // моточасы на конец
-}
-
-// Интерфейсный метод
-func (e engHours) GetEngHoursStart() float64 {
-	return e.engHoursStart
-}
-
-// Интерфейсный метод
-func (e engHours) GetEngHoursCurrent() float64 {
-	return e.engHoursCurrent
-}
-
-// Интерфейсный метод
-func (e engHours) GetEngHoursEnd() float64 {
-	return e.engHoursEnd
-}
-
-// метод переброса данных из интерфейса в структуру
-func (e *engHours) loadingInterfaceData(interfaceData interface{}) error {
-	engHoursInterface, err := utils.TypeConversion[engHoursDataInterface](interfaceData)
-	if err != nil {
-		err = fmt.Errorf("%w: %w", interfaceLoadingToStructError{"engHours"}, err)
-		return err
-	}
-
-	e.engHoursStart = engHoursInterface.GetEngHoursStart()
-	e.engHoursEnd = engHoursInterface.GetEngHoursEnd()
-	e.engHoursCurrent = engHoursInterface.GetEngHoursCurrent()
-
-	return err
+	engHoursStart   float32 // моточасы на начало
+	engHoursCurrent float32 // последняя обновленноая запись моточасов
+	engHoursEnd     float32 // моточасы на конец
 }
 
 // метод для создания новой структуры engHours на основании данных старой структуры
@@ -189,7 +108,7 @@ func (e *engHours) createNewEngHours() *engHours {
 }
 
 // метод для обновления данных по моточасам
-func (e *engHours) updateEngHours(engHours float64) {
+func (e *engHours) updateEngHours(engHours float32) {
 	e.engHoursEnd = engHours
 	e.engHoursCurrent = e.engHoursEnd - e.engHoursStart
 }
@@ -202,8 +121,8 @@ type rawEventData struct {
 	Data struct {
 		Mileage     int     `json:"mileage"`      // data -> mileage : пробег
 		GpsMileage  int     `json:"gps_mileage"`  // data -> gps_mileage : пробег по gps
-		EngineHours float64 `json:"engine_hours"` // data -> engine_hours : моточасы
-		avSpeed     float64 `json:"s_av_speed"`   // data -> s_av_speed : средняя скорость водителя на технике
+		EngineHours float32 `json:"engine_hours"` // data -> engine_hours : моточасы
+		AvSpeed     float32 `json:"s_av_speed"`   // data -> s_av_speed : средняя скорость водителя на технике
 	} `json:"data"`
 	EventData struct {
 		DriverInfo struct {
@@ -226,7 +145,7 @@ func (e rawEventData) getDecryptedData() (*eventData, error) {
 		engineHours: e.Data.EngineHours,
 		fioDriver:   e.EventData.DriverInfo.Fio,
 		numDriver:   e.EventData.DriverInfo.TabNum,
-		avSpeed:     e.Data.avSpeed,
+		avSpeed:     e.Data.AvSpeed,
 	}
 
 	return data, err
@@ -238,14 +157,14 @@ type eventData struct {
 	mesTime     time.Time // время сообщения
 	mileage     int       // пробег
 	gpsMileage  int       // пробег по gps
-	engineHours float64   // моточасы
+	engineHours float32   // моточасы
 	fioDriver   string    // ФИО водителя
 	numDriver   int       // номер водителя
-	avSpeed     float64   // средняя скрорость водителя на технике
+	avSpeed     float32   // средняя скрорость водителя на технике
 }
 
 // стукрура содержащая сконвертированные интерфейсы ответа от модуля storage
 type storageAnswerData struct {
-	shiftData         *shiftObjData
+	shiftData         *ShiftObjData
 	driverSessionData *sessionDriverData
 }
