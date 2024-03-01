@@ -1,8 +1,9 @@
 package storage
 
 import (
+	utils "agg-data-per-shift/pkg/utils"
+
 	"github.com/jackc/pgx/v5"
-	log "github.com/sirupsen/logrus"
 )
 
 // функция преобразует результат запроса в виде pgx.Rows в структуру типа T.
@@ -12,8 +13,7 @@ func convertingQueryRowResultIntoStructure[T any](rows pgx.Rows) (T, error) {
 
 	rowObj, err := pgx.CollectOneRow[T](rows, pgx.RowToStructByName[T])
 	if err != nil {
-		log.Error(err)
-		return rowObj, err
+		err = utils.Wrapper(convertRowToStructError{}, err)
 	}
 
 	return rowObj, err

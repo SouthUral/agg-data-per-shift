@@ -22,3 +22,18 @@ type queryDBError struct {
 func (e queryDBError) Error() string {
 	return "query DB error"
 }
+
+// ошибка конвертирования строки ответа на запрос в структуру
+type convertRowToStructError struct {
+}
+
+func (e convertRowToStructError) Error() string {
+	return "error convert row to struct"
+}
+
+type responceShiftSessionError struct {
+}
+
+func (e responceShiftSessionError) Error() string {
+	return "responce shift or session error"
+}

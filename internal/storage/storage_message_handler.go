@@ -70,11 +70,13 @@ func (s *StorageMessageHandler) handlerMesAggMileageHours(ctx context.Context, m
 	switch mes.GetType() {
 	case restoreShiftDataPerObj:
 		// обработка сообщения восстановления состояния
-		// TODO: нужно отправить два запроса в БД (чтобы забрать данные смены и сессии)
-		// дождаться выполнения обоих запросов
-		// ответом будет строка из таблицы смен и строка из таблицы сессий
-		// ответ от БД преобразовать в структуру (под интерфейс) и отправить обратно
-		s.handlerRestoreShiftDataPerObj(ctx, mes.GetObjID())
+		response := s.handlerRestoreShiftDataPerObj(ctx, mes.GetObjID())
+		answer := answerForAggMileageHours{
+			shiftData:   response.responseShift.data,
+			sessionData: response.responseSession.data,
+			err:         response.handlingErrors(),
+		}
+		message.SendAnswer(answer)
 	case addNewShiftAndSession:
 		// обработка сообщения добавление новых смены и сессии
 		// ответом будет id смены и id сессии
@@ -93,7 +95,11 @@ func (s *StorageMessageHandler) handlerMesAggMileageHours(ctx context.Context, m
 }
 
 // метод производит два ассинхронных запроса на получение строк из БД
-func (s *StorageMessageHandler) handlerRestoreShiftDataPerObj(ctx context.Context, objId int) {
+func (s *StorageMessageHandler) handlerRestoreShiftDataPerObj(ctx context.Context, objId int) responceShiftSession {
+	var counterResponse int
+	var result responceShiftSession
+	numResponse := 2 // количество ответов, которые нужно получить
+
 	chShift := make(chan responseDB)
 	chSession := make(chan responseDB)
 
@@ -135,6 +141,26 @@ func (s *StorageMessageHandler) handlerRestoreShiftDataPerObj(ctx context.Contex
 
 		defer func() { chSession <- responseDB{data: b, err: err} }()
 	}()
+
+	for {
+
+		select {
+		case <-ctx.Done():
+			return result
+		case shiftResponseData := <-chShift:
+			result.responseShift = shiftResponseData
+			counterResponse++
+			if counterResponse == numResponse {
+				return result
+			}
+		case sessionDataResponce := <-chSession:
+			result.responseSession = sessionDataResponce
+			counterResponse++
+			if counterResponse == numResponse {
+				return result
+			}
+		}
+	}
 
 }
 
