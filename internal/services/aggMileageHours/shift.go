@@ -4,6 +4,26 @@ import (
 	"time"
 )
 
+// функция создает объект смены на основании данных из события.
+func initNewShift(event *eventData, numShift int, dateShift time.Time, eventOffset int64) *ShiftObjData {
+	newShift := &ShiftObjData{
+		// Id: будет заполнено после записи данных в БД
+		NumShift:        numShift,
+		ShiftDateStart:  event.mesTime, // нужно сюда поставить дату начала смены, а не текущего события
+		ShiftDateEnd:    event.mesTime, // нужно поставить дату конца смены, а не текущего события
+		ShiftDate:       dateShift,
+		UpdatedTime:     event.mesTime,
+		Offset:          eventOffset,
+		CurrentDriverId: event.numDriver,
+		Loaded:          false, // при создании неизвестно является ли транспорт груженым
+		engHoursData:    initNewEngHours(event),
+		mileageData:     initNewMileageData(event),
+		mileageGPSData:  initNewMileageData(event),
+	}
+
+	return newShift
+}
+
 // данные смены по объекту техники
 type ShiftObjData struct {
 	Id              int          `json:"id"`                // id текущей смены
@@ -100,4 +120,39 @@ func (s *ShiftObjData) updateShiftObjData(eventData *eventData, eventOffset int6
 	s.engHoursData.updateEngHours(eventData.engineHours)
 	s.mileageData.updateMileageData(eventData.mileage, objLoaded)
 	s.mileageGPSData.updateMileageData(eventData.gpsMileage, objLoaded)
+}
+
+// метод преобразует объект смены в json
+func (s *ShiftObjData) conversionToJson() ([]byte, error) {
+	trunsportStruct := RowShiftObjData{
+		Id:              s.Id,
+		NumShift:        s.NumShift,
+		ShiftDateStart:  s.ShiftDateStart,
+		ShiftDateEnd:    s.ShiftDateEnd,
+		ShiftDate:       s.ShiftDate,
+		UpdatedTime:     s.UpdatedTime,
+		Offset:          s.Offset,
+		CurrentDriverId: s.CurrentDriverId,
+		Loaded:          s.Loaded,
+		EngHoursStart:   s.engHoursData.engHoursStart,
+		EngHoursEnd:     s.engHoursData.engHoursEnd,
+		EngHoursCurrent: s.engHoursData.engHoursCurrent,
+
+		MileageStart:                s.mileageData.mileageStart,
+		MileageEnd:                  s.mileageData.mileageEnd,
+		MileageCurrent:              s.mileageData.mileageCurrent,
+		MileageLoaded:               s.mileageData.mileageLoaded,
+		MileageEmpty:                s.mileageData.mileageEmpty,
+		MileageAtBeginningOfLoading: s.mileageData.mileageAtBeginningOfLoading,
+
+		MileageGPSStart:                s.mileageGPSData.mileageStart,
+		MileageGPSEnd:                  s.mileageGPSData.mileageEnd,
+		MileageGPSCurrent:              s.mileageGPSData.mileageCurrent,
+		MileageGPSLoaded:               s.mileageGPSData.mileageLoaded,
+		MileageGPSEmpty:                s.mileageGPSData.mileageEmpty,
+		MileageGPSAtBeginningOfLoading: s.mileageGPSData.mileageAtBeginningOfLoading,
+	}
+
+	res, err := conversionToJson[RowShiftObjData](trunsportStruct)
+	return res, err
 }

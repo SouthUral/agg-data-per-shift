@@ -50,6 +50,19 @@ func (s settingsDurationShifts) defineShift(dateEvent time.Time) (int, time.Time
 	return numShift, dateShift, err
 }
 
+func initNewMileageData(eventData *eventData) *mileageData {
+	newMileageData := &mileageData{
+		mileageStart:                eventData.mileage,
+		mileageCurrent:              0,
+		mileageEnd:                  eventData.mileage,
+		mileageLoaded:               0, // значение 0 т.к. неизвестно в каком состоянии находится машина
+		mileageAtBeginningOfLoading: 0, // значение 0 т.к. неизвестно в каком состоянии находится машина
+		mileageEmpty:                0, // значение 0 т.к. неизвестно в каком состоянии находится машина
+
+	}
+	return newMileageData
+}
+
 // данные по пробегу за смену/сессию
 type mileageData struct {
 	mileageStart                int // пробег на начало (смены/сессии)
@@ -89,6 +102,15 @@ func (m *mileageData) updateMileageData(mileage int, objLoaded bool) {
 		}
 	}
 	m.mileageEmpty = m.mileageCurrent - m.mileageLoaded
+}
+
+func initNewEngHours(eventData *eventData) *engHours {
+	engHours := &engHours{
+		engHoursStart:   eventData.engineHours,
+		engHoursEnd:     eventData.engineHours,
+		engHoursCurrent: 0,
+	}
+	return engHours
 }
 
 // данные по моточасам за смену/сессию
@@ -161,10 +183,4 @@ type eventData struct {
 	fioDriver   string    // ФИО водителя
 	numDriver   int       // номер водителя
 	avSpeed     float32   // средняя скрорость водителя на технике
-}
-
-// стукрура содержащая сконвертированные интерфейсы ответа от модуля storage
-type storageAnswerData struct {
-	shiftData         *ShiftObjData
-	driverSessionData *sessionDriverData
 }

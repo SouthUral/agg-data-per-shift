@@ -6,26 +6,31 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
+	storage "agg-data-per-shift/internal/storage"
 	utils "agg-data-per-shift/pkg/utils"
 )
 
 // структура в которой происходит распределение событий по горутинам объектов техники
 // ---
 type EventRouter struct {
-	incomingEventCh chan interface{}          // канал для получения событий
-	storageCh       chan interface{}          // канал для связи с модулем psql
-	aggObjs         map[int]*AggDataPerObject // map с объектами агрегации данных (по id техники)
-	settingShift    *settingsDurationShifts   // настройки смены
-	cancel          func()
+	incomingEventCh  chan interface{}          // канал для получения событий
+	storageCh        chan interface{}          // канал для связи с модулем psql
+	aggObjs          map[int]*AggDataPerObject // map с объектами агрегации данных (по id техники)
+	settingShift     *settingsDurationShifts   // настройки смены
+	pgConn           *storage.PgConn
+	cancel           func()
+	timeWaitResponse int // для горутин обработчиков, время ожидания ответа от БД
 }
 
-func InitEventRouter() (*EventRouter, context.Context) {
+func InitEventRouter(storageCh chan interface{}, timeWaitResponse int) (*EventRouter, context.Context) {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	res := &EventRouter{
-		incomingEventCh: make(chan interface{}),
-		cancel:          cancel,
-		aggObjs:         make(map[int]*AggDataPerObject),
+		incomingEventCh:  make(chan interface{}),
+		cancel:           cancel,
+		aggObjs:          make(map[int]*AggDataPerObject),
+		storageCh:        storageCh,
+		timeWaitResponse: timeWaitResponse,
 	}
 
 	go res.routing(ctx)
@@ -84,7 +89,7 @@ func (e *EventRouter) getAggObj(objId int) *AggDataPerObject {
 }
 
 func (e *EventRouter) createNewAggObj(objId int) *AggDataPerObject {
-	aggObj, _ := initAggDataPerObject(objId, e.settingShift, e.storageCh)
+	aggObj, _ := initAggDataPerObject(objId, 100, e.timeWaitResponse, e.settingShift, e.storageCh)
 	e.aggObjs[objId] = aggObj
 	return aggObj
 }

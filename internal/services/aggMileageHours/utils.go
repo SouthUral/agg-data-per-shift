@@ -41,6 +41,12 @@ func decodingMesFromStorageToStruct[T RowShiftObjData | RowSessionObjData](data 
 	return target, err
 }
 
+// конвертирует структуры в json
+func conversionToJson[T any](data T) ([]byte, error) {
+	b, err := json.Marshal(data)
+	return b, err
+}
+
 func timeConversion(date string) (time.Time, error) {
 	dateSplits := strings.Split(date, ".")
 	dateSplits[1] = dateSplits[1][:3]
@@ -49,30 +55,15 @@ func timeConversion(date string) (time.Time, error) {
 	return resTime, err
 }
 
-// функция для преобразования ответа от модуля storage в интерфейсы модуля
-func сonversionAnswerStorage(answer interface{}) (storageAnswerData, error) {
-	var err error
-	convertedStorageData := storageAnswerData{}
+// функция для преобразования ответа от модуля storage в интерфейс incomingMessageFromStorage
+func сonversionAnswerStorage(answer interface{}) (incomingMessageFromStorage, error) {
 
 	storageAnswer, err := utils.TypeConversion[incomingMessageFromStorage](answer)
 	if err != nil {
-		err = fmt.Errorf("%w: %w", typeConversionAnswerStorageDataError{}, err)
-		return convertedStorageData, err
+		err = utils.Wrapper(typeConversionAnswerStorageDataError{}, err)
 	}
 
-	err = convertedStorageData.shiftData.loadingData(storageAnswer.GetDataShift())
-	if err != nil {
-		err = fmt.Errorf("%w: %w", typeConversionAnswerStorageDataError{}, err)
-		return convertedStorageData, err
-	}
-
-	err = convertedStorageData.driverSessionData.loadingData(storageAnswer.GetDataDriverSession())
-	if err != nil {
-		err = fmt.Errorf("%w: %w", typeConversionAnswerStorageDataError{}, err)
-		return convertedStorageData, err
-	}
-
-	return convertedStorageData, err
+	return storageAnswer, err
 }
 
 // функция сравнивания двух дат

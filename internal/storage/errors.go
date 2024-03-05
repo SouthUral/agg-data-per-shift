@@ -37,3 +37,10 @@ type responceShiftSessionError struct {
 func (e responceShiftSessionError) Error() string {
 	return "responce shift or session error"
 }
+
+type noRowsError struct {
+}
+
+func (e noRowsError) Error() string {
+	return "no rows in result set"
+}

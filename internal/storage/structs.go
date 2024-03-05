@@ -2,8 +2,6 @@ package storage
 
 import (
 	"time"
-
-	utils "agg-data-per-shift/pkg/utils"
 )
 
 // данные смены (для получения из БД)
@@ -74,18 +72,4 @@ type responseDB struct {
 type responceShiftSession struct {
 	responseShift   responseDB
 	responseSession responseDB
-}
-
-// проверка на наличие ошибки при произведении и обработке запросов
-func (r responceShiftSession) handlingErrors() error {
-	var err error
-	if r.responseShift.err != nil {
-		err = utils.Wrapper(responceShiftSessionError{}, r.responseShift.err)
-	}
-
-	if r.responseSession.err != nil {
-		err = utils.Wrapper(responceShiftSessionError{}, r.responseSession.err)
-	}
-
-	return err
 }

@@ -7,6 +7,7 @@ import (
 
 	amqp "agg-data-per-shift/internal/amqp/amqp_client"
 	aggMileage "agg-data-per-shift/internal/services/aggMileageHours"
+	storage "agg-data-per-shift/internal/storage"
 
 	log "github.com/sirupsen/logrus"
 )
@@ -20,22 +21,31 @@ func init() {
 func main() {
 
 	envRabbit := "amqp://test_user:rmpassword@localhost:5672/asd"
+	pgUrl := "postgres://kovalenko:kovalenko@localhost:5435/report_bd"
 	nameConsumer := "test_consumer"
 	stream := "messages_stream"
 
 	rb := amqp.InitRabbit(envRabbit, stream, nameConsumer, 30)
+	st, ctxStorage := storage.InitStorageMessageHandler(pgUrl)
 	ctxRb := rb.StartRb()
 
-	aggEventRouter, ctxEventRouter := aggMileage.InitEventRouter()
+	aggEventRouter, ctxEventRouter := aggMileage.InitEventRouter(st.GetStorageCh(), 10)
 
 	for {
 		select {
 		case <-ctxRb.Done():
 			aggEventRouter.Shudown(fmt.Errorf("rabbitMQ закончил работу"))
+			st.Shutdown(fmt.Errorf("rabbitMQ закончил работу"))
 			time.Sleep(5 * time.Second)
 			return
 		case <-ctxEventRouter.Done():
 			rb.RabbitShutdown(fmt.Errorf("роутер закончил работу"))
+			st.Shutdown(fmt.Errorf("роутер закончил работу"))
+			time.Sleep(5 * time.Second)
+			return
+		case <-ctxStorage.Done():
+			aggEventRouter.Shudown(fmt.Errorf("ошибка storage"))
+			rb.RabbitShutdown(fmt.Errorf("ошибка storage"))
 			time.Sleep(5 * time.Second)
 			return
 		case msg := <-rb.GetChan():

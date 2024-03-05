@@ -4,6 +4,24 @@ import (
 	"time"
 )
 
+// функция создает объект сессии на основании данных из события.
+func initNewSession(event *eventData, eventOffset int64) *sessionDriverData {
+	newShift := &sessionDriverData{
+		// shiftId: будет заполнено после записи объекта в БД
+		// sessionId: будет записано после записи объекта в БД
+		driverId:          event.numDriver,
+		offset:            eventOffset,
+		timeStartSession:  event.mesTime,
+		timeUpdateSession: event.mesTime,
+		avSpeed:           event.avSpeed,
+		engHoursData:      initNewEngHours(event),
+		mileageData:       initNewMileageData(event),
+		mileageGPSData:    initNewMileageData(event),
+	}
+
+	return newShift
+}
+
 // данные по сессии водителя в смене
 type sessionDriverData struct {
 	shiftId           int          // id смены, в которой находится сессия
@@ -99,4 +117,38 @@ func (s *sessionDriverData) updateSession(eventData *eventData, eventOffset int6
 	s.engHoursData.updateEngHours(eventData.engineHours)
 	s.mileageData.updateMileageData(eventData.mileage, objLoaded)
 	s.mileageGPSData.updateMileageData(eventData.gpsMileage, objLoaded)
+}
+
+// метод преобразует объект смены в json
+func (s *sessionDriverData) conversionToJson() ([]byte, error) {
+	trunsportStruct := RowSessionObjData{
+		ShiftId:           s.shiftId,
+		SessionId:         s.sessionId,
+		DriverId:          s.driverId,
+		Offset:            s.offset,
+		TimeStartSession:  s.timeStartSession,
+		TimeUpdateSession: s.timeUpdateSession,
+		AvSpeed:           s.avSpeed,
+
+		EngHoursStart:   s.engHoursData.engHoursStart,
+		EngHoursEnd:     s.engHoursData.engHoursEnd,
+		EngHoursCurrent: s.engHoursData.engHoursCurrent,
+
+		MileageStart:                s.mileageData.mileageStart,
+		MileageEnd:                  s.mileageData.mileageEnd,
+		MileageCurrent:              s.mileageData.mileageCurrent,
+		MileageLoaded:               s.mileageData.mileageLoaded,
+		MileageEmpty:                s.mileageData.mileageEmpty,
+		MileageAtBeginningOfLoading: s.mileageData.mileageAtBeginningOfLoading,
+
+		MileageGPSStart:                s.mileageGPSData.mileageStart,
+		MileageGPSEnd:                  s.mileageGPSData.mileageEnd,
+		MileageGPSCurrent:              s.mileageGPSData.mileageCurrent,
+		MileageGPSLoaded:               s.mileageGPSData.mileageLoaded,
+		MileageGPSEmpty:                s.mileageGPSData.mileageEmpty,
+		MileageGPSAtBeginningOfLoading: s.mileageGPSData.mileageAtBeginningOfLoading,
+	}
+
+	res, err := conversionToJson[RowSessionObjData](trunsportStruct)
+	return res, err
 }

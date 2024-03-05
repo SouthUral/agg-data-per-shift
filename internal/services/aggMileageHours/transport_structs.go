@@ -9,8 +9,8 @@ type eventForAgg struct {
 type mesForStorage struct {
 	typeMes         string
 	objectID        int
-	shiftInitData   ShiftObjData
-	sessionInitData sessionDriverData
+	shiftInitData   []byte
+	sessionInitData []byte
 }
 
 // метод для получения типа сообщения
@@ -24,13 +24,13 @@ func (m mesForStorage) GetObjID() int {
 }
 
 // метод возвращает начальные данные для смены (данные для добавления новых данных в БД)
-func (m mesForStorage) GetShiftData() interface{} {
+func (m mesForStorage) GetShiftData() []byte {
 	return m.shiftInitData
 
 }
 
 // метод возвращает начальные данные для сессии (данные для добавления новых данных в БД)
-func (m mesForStorage) GetSessionData() interface{} {
+func (m mesForStorage) GetSessionData() []byte {
 	return m.sessionInitData
 }
 
@@ -50,6 +50,6 @@ func (t transportStruct) GetMesage() interface{} {
 }
 
 // метод для отправки ответа от модуля storage
-func (t transportStruct) SendAnswer(answer interface{}) {
-	t.reverseChannel <- answer
+func (t transportStruct) GetChForResponse() chan interface{} {
+	return t.reverseChannel
 }

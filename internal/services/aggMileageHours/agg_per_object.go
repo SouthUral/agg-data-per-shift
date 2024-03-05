@@ -2,8 +2,10 @@ package aggmileagehours
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"time"
+
+	utils "agg-data-per-shift/pkg/utils"
 
 	log "github.com/sirupsen/logrus"
 )
@@ -20,6 +22,7 @@ type AggDataPerObject struct {
 	stateRestored           bool                    // флаг сигнализирующий и восстановленном состоянии, если флаг false занчит состояние еще не восстановлено
 	settingsShift           *settingsDurationShifts // настройки смены, меняются централизованно
 	timeWaitResponseStorage int                     // время ожидания ответа от БД
+	numAttemptRequest       int                     // количество попыток отправок запроса в модуль storage
 }
 
 // TODO: параметры смены будут в отдельном модуле, который будет отправлять информацию в случае изменения, горутины работают со своими локальными настройками
@@ -28,15 +31,17 @@ type AggDataPerObject struct {
 // TODO: при инициализации нужно полностью восстановить информацию о смене
 // TODO: горутина сама восстанавливает информацию о смене, после создания она отправляет запрос в БД на восстановление состояния
 
-func initAggDataPerObject(objectId int, settingsShift *settingsDurationShifts, storageCh chan interface{}) (*AggDataPerObject, context.Context) {
+func initAggDataPerObject(objectId, numAttemptRequest, timeWaitResponse int, settingsShift *settingsDurationShifts, storageCh chan interface{}) (*AggDataPerObject, context.Context) {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	res := &AggDataPerObject{
-		objectId:      objectId,
-		incomingCh:    make(chan eventForAgg), // TODO: возможно нужен буферизированный канал, т.к. горутина может неуспеть обработать событие до отправки следующего
-		cancel:        cancel,
-		settingsShift: settingsShift,
-		storageCh:     storageCh,
+		objectId:                objectId,
+		incomingCh:              make(chan eventForAgg), // TODO: возможно нужен буферизированный канал, т.к. горутина может неуспеть обработать событие до отправки следующего
+		cancel:                  cancel,
+		settingsShift:           settingsShift,
+		storageCh:               storageCh,
+		timeWaitResponseStorage: timeWaitResponse,
+		numAttemptRequest:       numAttemptRequest,
 	}
 
 	// запуск горутины получения событий
@@ -61,8 +66,11 @@ func (a *AggDataPerObject) gettingEvents(ctx context.Context) {
 				// на время восстановления горутина блокируется, сообщения собираются в канале
 				if !a.stateRestored {
 					err := a.restoringState(ctx)
-					log.Error(err)
-					return
+					if err != nil {
+						log.Error(err)
+						return
+					}
+
 				}
 				err := a.eventHandling(ctx, msg.eventData, msg.offset)
 				if err != nil {
@@ -82,19 +90,36 @@ func (a *AggDataPerObject) restoringState(ctx context.Context) error {
 		objectID: a.objectId,
 	}
 
-	answer, err := a.sendingMesToStorage(ctx, mes, a.timeWaitResponseStorage)
+	// попытки отправки запросов в storage + обработка ошибок
+	responseStorage, err := a.attemptSendRequest(ctx, mes)
 	if err != nil {
-		err = fmt.Errorf("%w: %w", restoringStateError{}, err)
+		err = utils.Wrapper(restoringStateError{}, err)
 		return err
 	}
 
-	answerData, err := сonversionAnswerStorage(answer)
+	// будем считать, что все ошибки, которые вернутся
+	err = responseStorage.GetError()
 	if err != nil {
-		err = fmt.Errorf("%w: %w", restoringStateError{}, err)
-		return err
+		switch err.Error() {
+		case "error convert row to struct: no rows in result set":
+			// создание пустых объектов сессии и смены
+			// создание пустых объектов и дальнейшая работа с ними дожна производится в методе eventHandling
+			return nil
+		default:
+			// критическая ошибка
+			err = utils.Wrapper(restoringStateError{}, err)
+			return err
+		}
 	}
 
-	a.loadingStorageData(answerData)
+	// проверка ошибок конвертации
+	errDecodeShift := a.shiftCurrentData.loadingData(responseStorage.GetDataShift())
+	errDecodeSession := a.sessionCurrentData.loadingData(responseStorage.GetDataDriverSession())
+	if errDecodeShift != nil || errDecodeSession != nil {
+		err = utils.Wrapper(restoringStateError{}, errDecodeShift)
+		return err
+	}
+	// флаг переводится в состояние true в случает если данные были получены из БД и успешно записаны в локальные структуры
 	a.stateRestored = true
 
 	return err
@@ -112,35 +137,76 @@ func (a *AggDataPerObject) eventHandling(ctx context.Context, eventData *eventDa
 		return err
 	}
 
-	// если номер смены и дата смены не совпадают с номером и датой текущей смены, то нужно создать новую смену и сессию
-	if !a.shiftCurrentData.checkDateNumCurrentShift(numShift, dateShift) {
-		// получение номера и даты смены
-		typeMes = a.createNewObjects(eventData, numShift, dateShift)
-	}
+	// создание смены, если она не была восстановлена (отсутствовали данные в БД)
+	if !a.stateRestored {
+		// все данные для создания смены берутся из события
+		// остальные ветки игнорируются
+		typeMes = addNewShiftAndSession
+		a.shiftCurrentData = initNewShift(eventData, numShift, dateShift, eventOffset)
+		a.sessionCurrentData = initNewSession(eventData, eventOffset)
+		a.stateRestored = true
+	} else {
+		// если номер смены и дата смены не совпадают с номером и датой текущей смены, то нужно создать новую смену и сессию
+		if !a.shiftCurrentData.checkDateNumCurrentShift(numShift, dateShift) {
+			// получение номера и даты смены
+			typeMes = a.createNewObjects(eventData, numShift, dateShift)
+		}
 
-	// если же дата и номер смены совпадают, далее нужно проверить не поменялась ли сессия водителя
-	if !a.sessionCurrentData.checkDriverSession(eventData.numDriver) {
-		// если id не совпадает с текущим то нужно создать новую сессию и обновить данные по смене
-		typeMes = a.createSession(eventData)
+		// если же дата и номер смены совпадают, далее нужно проверить не поменялась ли сессия водителя
+		if !a.sessionCurrentData.checkDriverSession(eventData.numDriver) {
+			// если id не совпадает с текущим то нужно создать новую сессию и обновить данные по смене
+			typeMes = a.createSession(eventData)
+		}
 	}
-
 	// обновление локальных объектов сессии и смены
 	a.updateObjects(eventData, eventOffset)
 
+	// формирование сообщения для модуля storage
+	shiftJsonData, errShiftConvert := a.shiftCurrentData.conversionToJson()
+	if errShiftConvert != nil {
+		// ошибки конвертации - это критические ошибки, они всегда требуют остановки программы
+		return errShiftConvert
+	}
+	sessionJsonData, errSessionConvert := a.sessionCurrentData.conversionToJson()
+	if errSessionConvert != nil {
+		return errSessionConvert
+	}
+
+	mes := mesForStorage{
+		typeMes:         typeMes,
+		objectID:        a.objectId,
+		shiftInitData:   shiftJsonData,
+		sessionInitData: sessionJsonData,
+	}
+
 	// отправка сообщения в модуль storage (события будут обрабатываться по-разному, в зависимости от сообщения typeMes)
-	answerFromStorage, err := a.processAndSendToStorage(ctx, typeMes)
+	answerFromStorage, err := a.processAndSendToStorage(ctx, mes)
 	if err != nil {
 		return err
 	}
 
+	errStorage := answerFromStorage.GetError()
+	if errStorage != nil {
+		return errStorage
+	}
+
 	switch typeMes {
 	case addNewShiftAndSession:
-		a.sessionCurrentData.setSessionId(answerFromStorage.driverSessionData.sessionId)
-		a.sessionCurrentData.setShiftId(answerFromStorage.shiftData.Id)
-		a.shiftCurrentData.setShiftId(answerFromStorage.shiftData.Id)
+		shiftData, errDecodingShift := decodingMesFromStorageToStruct[RowShiftObjData](answerFromStorage.GetDataShift())
+		sessionData, errDecodingSession := decodingMesFromStorageToStruct[RowSessionObjData](answerFromStorage.GetDataDriverSession())
+		if errDecodingShift != nil || errDecodingSession != nil {
+			return utils.Wrapper(errDecodingShift, errDecodingSession)
+		}
+		a.sessionCurrentData.setSessionId(sessionData.SessionId)
+		a.sessionCurrentData.setShiftId(sessionData.ShiftId)
+		a.shiftCurrentData.setShiftId(shiftData.Id)
 		log.Debug()
 	case updateShiftAndAddNewSession:
-		a.sessionCurrentData.setSessionId(answerFromStorage.driverSessionData.sessionId)
+		sessionData, errDecodingSession := decodingMesFromStorageToStruct[RowSessionObjData](answerFromStorage.GetDataDriverSession())
+		if errDecodingSession != nil {
+			return errDecodingSession
+		}
+		a.sessionCurrentData.setSessionId(sessionData.SessionId)
 		log.Debug()
 	case updateShiftAndSession:
 		log.Debug()
@@ -178,29 +244,48 @@ func (a *AggDataPerObject) updateObjects(eventData *eventData, eventOffset int64
 	a.shiftCurrentData.updateShiftObjData(eventData, eventOffset, a.shiftCurrentData.Loaded)
 }
 
-// метод отправляет формирует сообщение и отправляет его в модуль storage,
-// далее принимает ответ и конвертирует его во внутренние интерфейсы
-func (a *AggDataPerObject) processAndSendToStorage(ctx context.Context, typeMes string) (storageAnswerData, error) {
+// обертка над processAndSendToStorage, делает несколько попыток отправок запроса в модуль storage.
+func (a *AggDataPerObject) attemptSendRequest(ctx context.Context, mes mesForStorage) (incomingMessageFromStorage, error) {
+	var responseStorage incomingMessageFromStorage
 	var err error
-	var answerData storageAnswerData
 
-	mesForStorage := mesForStorage{
-		typeMes:         typeMes,
-		objectID:        a.objectId,
-		shiftInitData:   *a.shiftCurrentData,
-		sessionInitData: *a.sessionCurrentData,
+	for i := 0; i < a.numAttemptRequest; i++ {
+		select {
+		case <-ctx.Done():
+			err = contextAggPerObjectClosedError{}
+			return responseStorage, err
+		default:
+			responseStorage, err = a.processAndSendToStorage(ctx, mes)
+			if err != nil {
+				if !errors.Is(err, timeOutWaitAnswerDBError{}) {
+					return responseStorage, err
+				}
+			} else {
+				return responseStorage, err
+			}
+		}
 	}
+	err = attemptRequestError{}
+	return responseStorage, err
+}
 
-	answer, err := a.sendingMesToStorage(ctx, mesForStorage, a.timeWaitResponseStorage)
+// метод отправляет формирует сообщение и отправляет его в модуль storage,
+// далее принимает ответ и конвертирует его в интерфейс ответа от storage:
+//   - ctx: общий контекст обработчика событий
+//   - mes: сообщение которое нужно отправить в storage
+func (a *AggDataPerObject) processAndSendToStorage(ctx context.Context, mes mesForStorage) (incomingMessageFromStorage, error) {
+	var err error
+	var answerData incomingMessageFromStorage
+
+	answer, err := a.sendingMesToStorage(ctx, mes, a.timeWaitResponseStorage)
 	if err != nil {
-		err = fmt.Errorf("%w: %w", processAndSendToStorageError{}, err)
+		err = utils.Wrapper(processAndSendToStorageError{}, err)
 		return answerData, err
 	}
 
 	answerData, err = сonversionAnswerStorage(answer)
 	if err != nil {
-		err = fmt.Errorf("%w: %w", processAndSendToStorageError{}, err)
-		return answerData, err
+		err = utils.Wrapper(processAndSendToStorageError{}, err)
 	}
 
 	return answerData, err
@@ -208,6 +293,7 @@ func (a *AggDataPerObject) processAndSendToStorage(ctx context.Context, typeMes 
 
 // метод отправляет сообщение в модуль storage и ожидает от него ответ, если ответ не успеет прийти за timeWait, то метод вернет ошибку
 func (a *AggDataPerObject) sendingMesToStorage(ctx context.Context, mes mesForStorage, timeWait int) (interface{}, error) {
+	defer log.Info("sendingMesToStorage закончил работу")
 	var answer interface{}
 	var err error
 
@@ -221,22 +307,20 @@ func (a *AggDataPerObject) sendingMesToStorage(ctx context.Context, mes mesForSt
 	}
 
 	a.storageCh <- transportMes
+	log.Info("сообщение отправлено в storage")
 	select {
 	case <-ctx.Done():
 		err = contextAggPerObjectClosedError{}
+		log.Error(err)
 		return answer, err
 	case <-ctxTimeOut.Done():
 		err = timeOutWaitAnswerDBError{}
+		log.Error(err)
 		return answer, err
-	case answer := <-reverseChannel:
+	case answer := <-transportMes.reverseChannel:
+		log.Info("принят ответ от storage")
 		return answer, err
 	}
-}
-
-// метод загружает данные полученные из storage интерфейсов в локальные структуры
-func (a *AggDataPerObject) loadingStorageData(data storageAnswerData) {
-	a.sessionCurrentData = data.driverSessionData
-	a.shiftCurrentData = data.shiftData
 }
 
 // метод обработки типа события

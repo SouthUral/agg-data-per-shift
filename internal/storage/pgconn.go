@@ -2,6 +2,7 @@ package storage
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	utils "agg-data-per-shift/pkg/utils"
@@ -12,17 +13,17 @@ import (
 )
 
 // структура объекта работы с БД
-type pgConn struct {
+type PgConn struct {
 	url            string
 	timeOutQueryes time.Duration
 	dbpool         *pgxpool.Pool
 	cancel         func()
 }
 
-func initPgConn(url string, timeOutQueryes int) *pgConn {
+func initPgConn(url string, timeOutQueryes int) *PgConn {
 	ctx, cancel := context.WithCancel(context.Background())
 
-	p := &pgConn{
+	p := &PgConn{
 		url:            url,
 		cancel:         cancel,
 		timeOutQueryes: time.Duration(timeOutQueryes),
@@ -36,7 +37,7 @@ func initPgConn(url string, timeOutQueryes int) *pgConn {
 
 // процесс проверяет подключение к postgres в заданный промежуток
 // если подключения нет то производится попытка подключения
-func (p *pgConn) processConn(ctx context.Context, waitingTime int) {
+func (p *PgConn) processConn(ctx context.Context, waitingTime int) {
 	defer log.Warning("processConn is closed")
 	for {
 		select {
@@ -44,6 +45,7 @@ func (p *pgConn) processConn(ctx context.Context, waitingTime int) {
 			return
 		default:
 			if err := p.checkPool(); err != nil {
+				log.Error(err)
 				err = p.connPool(context.TODO())
 				if err != nil {
 					log.Error(err)
@@ -55,7 +57,7 @@ func (p *pgConn) processConn(ctx context.Context, waitingTime int) {
 }
 
 // метод для создания пула коннектов
-func (p *pgConn) connPool(ctx context.Context) error {
+func (p *PgConn) connPool(ctx context.Context) error {
 	dbpool, err := pgxpool.New(ctx, p.url)
 	if err != nil {
 		return err
@@ -65,12 +67,15 @@ func (p *pgConn) connPool(ctx context.Context) error {
 	return err
 }
 
-func (p *pgConn) checkPool() error {
+func (p *PgConn) checkPool() error {
+	if p.dbpool == nil {
+		return fmt.Errorf("коннект еще не создан")
+	}
 	err := p.dbpool.Ping(context.TODO())
 	return err
 }
 
-func (p *pgConn) closePoolConn() {
+func (p *PgConn) closePoolConn() {
 	err := p.checkPool()
 	if err != nil {
 		log.Warning("the connection pool has already been closed")
@@ -81,10 +86,10 @@ func (p *pgConn) closePoolConn() {
 }
 
 // метод для запросов в БД (любой запрос, который вернет данные)
-func (p *pgConn) queryDB(query string, args ...any) (pgx.Rows, error) {
-	ctx, _ := context.WithTimeout(context.Background(), p.timeOutQueryes*time.Second)
+func (p *PgConn) QueryDB(query string, timeOut int, args ...any) (pgx.Rows, error) {
+	ctx, _ := context.WithTimeout(context.Background(), time.Duration(timeOut)*time.Second)
 
-	rows, err := p.dbpool.Query(ctx, query, args)
+	rows, err := p.dbpool.Query(ctx, query, args...)
 	if err != nil {
 		err = utils.Wrapper(queryDBError{}, err)
 		log.Error(err)
@@ -92,9 +97,9 @@ func (p *pgConn) queryDB(query string, args ...any) (pgx.Rows, error) {
 	return rows, err
 }
 
-// метод прекращает работу модуля pgConn (завершает все активные горутины, разрывает коннект с БД)
-func (p *pgConn) shutdown(err error) {
-	log.Errorf("pgConn is terminated for a reason: %s", err)
+// метод прекращает работу модуля PgConn (завершает все активные горутины, разрывает коннект с БД)
+func (p *PgConn) Shutdown(err error) {
+	log.Errorf("PgConn is terminated for a reason: %s", err)
 	p.cancel()
 	p.closePoolConn()
 }

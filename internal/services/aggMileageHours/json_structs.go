@@ -9,6 +9,12 @@ import (
 type rowObjData struct {
 }
 
+// стукрура содержащая сконвертированные структуры ответа от модуля storage
+type storageAnswerData struct {
+	shiftData         *RowShiftObjData
+	driverSessionData *RowSessionObjData
+}
+
 // данные смены (для получения из БД)
 type RowShiftObjData struct {
 	Id              int       `json:"id"`                // id текущей смены

@@ -90,3 +90,11 @@ type processAndSendToStorageError struct {
 func (e processAndSendToStorageError) Error() string {
 	return "processAndSendToStorage error"
 }
+
+// количество попыток отправок запросов закончилось
+type attemptRequestError struct {
+}
+
+func (e attemptRequestError) Error() string {
+	return "the number of attempts to send requests has ended"
+}
