@@ -2,18 +2,18 @@ package storage
 
 // тип для отправки ответа модулю aggMileageHours
 type answerForAggMileageHours struct {
-	shiftData   []byte
-	sessionData []byte
+	shiftData   RowShiftObjData
+	sessionData RowSessionObjData
 	err         error
 }
 
 // интерфейсный метод
-func (a answerForAggMileageHours) GetDataShift() []byte {
+func (a answerForAggMileageHours) GetDataShift() interface{} {
 	return a.shiftData
 }
 
 // интерфейсный метод
-func (a answerForAggMileageHours) GetDataDriverSession() []byte {
+func (a answerForAggMileageHours) GetDataDriverSession() interface{} {
 	return a.sessionData
 }
 

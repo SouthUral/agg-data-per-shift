@@ -3,10 +3,10 @@ package aggmileagehours
 import (
 	"context"
 	"fmt"
+	"time"
 
 	log "github.com/sirupsen/logrus"
 
-	storage "agg-data-per-shift/internal/storage"
 	utils "agg-data-per-shift/pkg/utils"
 )
 
@@ -17,7 +17,6 @@ type EventRouter struct {
 	storageCh        chan interface{}          // канал для связи с модулем psql
 	aggObjs          map[int]*AggDataPerObject // map с объектами агрегации данных (по id техники)
 	settingShift     *settingsDurationShifts   // настройки смены
-	pgConn           *storage.PgConn
 	cancel           func()
 	timeWaitResponse int // для горутин обработчиков, время ожидания ответа от БД
 }
@@ -31,7 +30,14 @@ func InitEventRouter(storageCh chan interface{}, timeWaitResponse int) (*EventRo
 		aggObjs:          make(map[int]*AggDataPerObject),
 		storageCh:        storageCh,
 		timeWaitResponse: timeWaitResponse,
+		settingShift:     initSettingsDurationShifts(-4),
 	}
+
+	// временно сам добавляю смены
+	t1, _ := time.Parse(time.TimeOnly, "00:00:01")
+	t2, _ := time.Parse(time.TimeOnly, "11:59:59")
+	res.settingShift.AddShiftSetting(1, 12, t1)
+	res.settingShift.AddShiftSetting(2, 12, t2)
 
 	go res.routing(ctx)
 

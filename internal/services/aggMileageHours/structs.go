@@ -28,15 +28,37 @@ type settingShift struct {
 	shiftDuration  int       // продолжительность смены
 }
 
+// метод добаления смены
+// TODO: нужно сделать проверку что смена не пересекается с другими сменами
+func (s *settingsDurationShifts) AddShiftSetting(numShift, shiftDuration int, startTimeShift time.Time) {
+	s.mx.Lock()
+	s.shifts[numShift] = settingShift{
+		numShift:       numShift,
+		startTimeShift: startTimeShift,
+		shiftDuration:  shiftDuration,
+	}
+	s.mx.Unlock()
+}
+
 // метод для определения номера и даты смены
-func (s settingsDurationShifts) defineShift(dateEvent time.Time) (int, time.Time, error) {
+func (s *settingsDurationShifts) defineShift(dateEvent time.Time) (int, time.Time, error) {
+	// определять смену нужно по текущей дате в событии
 	var numShift int
 	var dateShift time.Time
 	var err error
 
 	s.mx.RLock()
 	for numShift, shiftSettings := range s.shifts {
-		startShift := shiftSettings.startTimeShift.Add(-time.Duration(s.offsetTimeShift) * time.Hour)
+		t := time.Date(dateEvent.Year(),
+			dateEvent.Month(),
+			dateEvent.Day(),
+			shiftSettings.startTimeShift.Hour(),
+			shiftSettings.startTimeShift.Minute(),
+			shiftSettings.startTimeShift.Second(),
+			shiftSettings.startTimeShift.Nanosecond(),
+			dateEvent.Local().Location(),
+		)
+		startShift := t.Add(-time.Duration(s.offsetTimeShift) * time.Hour)
 		endShift := startShift.Add(time.Duration(shiftSettings.shiftDuration) * time.Hour)
 		if dateEvent.After(startShift) && dateEvent.Before(endShift) {
 			// дата смены равна дате окончанию смены  т.к. смена может начинаться вечером в прошлый день
@@ -71,6 +93,21 @@ type mileageData struct {
 	mileageLoaded               int // пробег в груженом состоянии
 	mileageAtBeginningOfLoading int // пробег на начало последней погрузки (поле обнуляется после разгрузки)
 	mileageEmpty                int // пробег в порожнем состоянии
+}
+
+func (m *mileageData) loadingData(data interface{}) error {
+	mData, err := typeСonversion[mileageDataInterface](data)
+	if err != nil {
+		return err
+	}
+
+	m.mileageStart = mData.GetMileageStart()
+	m.mileageCurrent = mData.GetMileageCurrent()
+	m.mileageEnd = mData.GetMileageEnd()
+	m.mileageLoaded = mData.GetMileageLoaded()
+	m.mileageAtBeginningOfLoading = mData.GetMileageAtBeginningOfLoading()
+	m.mileageEmpty = mData.GetMileageEmpty()
+	return err
 }
 
 // метод для создания новой структуры mileageData на основании старой
@@ -118,6 +155,18 @@ type engHours struct {
 	engHoursStart   float32 // моточасы на начало
 	engHoursCurrent float32 // последняя обновленноая запись моточасов
 	engHoursEnd     float32 // моточасы на конец
+}
+
+func (e *engHours) loadingData(data interface{}) error {
+	eData, err := typeСonversion[engHoursDataInterface](data)
+	if err != nil {
+		return err
+	}
+
+	e.engHoursStart = eData.GetEngHoursStart()
+	e.engHoursEnd = eData.GetEngHoursEnd()
+	e.engHoursCurrent = eData.GetEngHoursCurrent()
+	return err
 }
 
 // метод для создания новой структуры engHours на основании данных старой структуры

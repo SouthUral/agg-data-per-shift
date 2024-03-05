@@ -12,12 +12,12 @@ type incomingMessage interface {
 
 // интерфейс сообщения от модуля storage
 type incomingMessageFromStorage interface {
-	GetDataShift() []byte         // возвращает json, который нужно привести к структуре shiftObjData
-	GetDataDriverSession() []byte // возвращает json, который нужно привести к структуре sessionDriverData
-	GetError() error              // возращает ошибку
+	GetDataShift() interface{}         // возвращает json, который нужно привести к структуре shiftObjData
+	GetDataDriverSession() interface{} // возвращает json, который нужно привести к структуре sessionDriverData
+	GetError() error                   // возращает ошибку
 }
 
-// данные смены (используются при восстановлении состояния)
+// данные смены
 type dataShiftFromStorage interface {
 	GetShiftId() int  // возвращает Id смены (индентификатор в таблице БД)
 	GetShiftNum() int // возвращает номер смены
@@ -27,13 +27,14 @@ type dataShiftFromStorage interface {
 	GetUpdatedTime() time.Time // время последнего обновления (пока под вопросом)
 	GetOffset() int64          // offset последнего события, которое было применено к смене
 	GetCurrentDriverId() int
-	GetStatusLoaded() bool          // груженый или нет (показатель всегда на послденее обновление записи)
+	GetStatusLoaded() bool // груженый или нет (показатель всегда на послденее обновление записи)
+
 	GetEngHoursData() interface{}   // получение интерфейса к данным о моточасах за смену
 	GetMileageData() interface{}    // получение интерфейса к данным пробега за смену
 	GetMileageGPSData() interface{} // получение интерфейса к данным пробега по GPS за смену
 }
 
-// данные текущей сессии водителя, в текущей смене (последней обновленной смене)
+// данные текущей сессии водителя
 type dataDriverSessionFromStorage interface {
 	GetShiftId() int                 // id смены, в которой находится сессия
 	GetSessionId() int               // id сессии
@@ -42,7 +43,7 @@ type dataDriverSessionFromStorage interface {
 	GetTimeStartSession() time.Time  // время начала сессии
 	GetTimeUpdateSession() time.Time // время последнего обновления сессии
 
-	GetAvSpeed() float64 // средняя скорость водителя в сессии
+	GetAvSpeed() float32 // средняя скорость водителя в сессии
 
 	GetEngHoursData() interface{}   // получение интерфейса к данным о моточасах за сессию
 	GetMileageData() interface{}    // получение интерфейса к данным пробега за сессию
@@ -51,9 +52,9 @@ type dataDriverSessionFromStorage interface {
 
 // интерфейс получения данных о моточасах
 type engHoursDataInterface interface {
-	GetEngHoursStart() float64   // моточасы на начало смены/сессии
-	GetEngHoursCurrent() float64 // последний обновленный показатель моточасов
-	GetEngHoursEnd() float64     // моточасы на конец смены/сессии
+	GetEngHoursStart() float32   // моточасы на начало смены/сессии
+	GetEngHoursCurrent() float32 // последний обновленный показатель моточасов
+	GetEngHoursEnd() float32     // моточасы на конец смены/сессии
 }
 
 // интерфейс получения данных о пробеге

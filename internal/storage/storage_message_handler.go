@@ -2,7 +2,6 @@ package storage
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 
 	utils "agg-data-per-shift/pkg/utils"
@@ -126,8 +125,8 @@ func (s *StorageMessageHandler) handlerRestoreShiftDataPerObj(ctx context.Contex
 	var result responceShiftSession
 	numResponse := 2 // количество ответов, которые нужно получить
 
-	chShift := makeRequestAndProcess[RowShiftObjData](s.dbConn, getLastObjShift, objId)
-	chSession := makeRequestAndProcess[RowSessionObjData](s.dbConn, getLastObjSession, objId)
+	chShift := makeRequestAndProcessShift(s.dbConn, getLastObjShift, objId)
+	chSession := makeRequestAndProcessSession(s.dbConn, getLastObjSession, objId)
 
 	for {
 		select {
@@ -151,57 +150,77 @@ func (s *StorageMessageHandler) handlerRestoreShiftDataPerObj(ctx context.Contex
 	}
 }
 
-func (s *StorageMessageHandler) handlerAddNewShiftAndSession(shiftData, sessionData []byte) (RowShiftObjData, RowSessionObjData, error) {
+func (s *StorageMessageHandler) handlerAddNewShiftAndSession(shiftData, sessionData interface{}) error {
 	// TODO: нужно преобразовать данные по смене и по сессии в структуры
 	// Сформировать запрос в БД, одновременно данные внести не получится, т.к нужен id смены для записи сессии
 	// сначала инсертить смену, получить id затем инсертить сессию
-	shiftStructData := RowShiftObjData{}
-	sessionStructData := RowSessionObjData{}
+	shiftStructData := shiftDataFromModule{}
+	sessionStructData := sessionDataFromModule{}
 
-	err := json.Unmarshal(shiftData, &shiftStructData)
+	err := shiftStructData.loadData(shiftData)
 	if err != nil {
-		return shiftStructData, sessionStructData, err
+		return err
+	}
+	err = sessionStructData.loadData(sessionData)
+	if err != nil {
+		return err
 	}
 
-	err = json.Unmarshal(sessionData, &sessionStructData)
-
-	return shiftStructData, sessionStructData, err
+	return err
 
 }
 
 // функция отправляет запрос в БД, получает ответ, конвертирует его в переданный тип, и из типа конвертирует его в json.
 // Функция обрабатывает ответ в одну строку.
-func makeRequestAndProcess[T any](dbConn *PgConn, request string, objectId int) chan responseDB {
-	responseCh := make(chan responseDB)
+func makeRequestAndProcessSession(dbConn *PgConn, request string, objectId int) chan responseSessionDB {
+	responseCh := make(chan responseSessionDB)
 	go func() {
 		response, err := dbConn.QueryDB(request, objectId)
-		// ошибка запроса
-		// ошибки могут быть разные, от ошибки запрса, до проблем с коннектом
-		// ошибки запроса (т.е. не верный запрос, или нет доступа) это критические ошибки
-		// ошибка коннекта не критическая (прекращение работы программы произойдет в случае израсходования попыток подключения)
 		if err != nil {
 			log.Error(err)
-			responseCh <- responseDB{err: err}
+			responseCh <- responseSessionDB{err: err}
 			return
 		}
 
-		DBdata, err := convertingQueryRowResultIntoStructure[T](response)
-		// ошибка конвертации в структуру
-		// если ошибка связана с отсутствием значений в результате запроса то эту ошибку нужно отдать на обработку в ответе
+		sessionData, engData, mileage, mileageGPS, err := convertingQueryRowResultIntoStructure[RowSessionObjData](response)
 		if err != nil {
 			log.Error(err)
-			responseCh <- responseDB{err: err}
+			responseCh <- responseSessionDB{err: err}
 			return
 		}
-		b, err := json.Marshal(DBdata)
-		// ошибка конвертации из json
-		// критическая ошибка
+
+		sessionData.engHours = engData
+		sessionData.mileageData = mileage
+		sessionData.mileageGPSData = mileageGPS
+
+		responseCh <- responseSessionDB{data: sessionData, err: err}
+		defer response.Close()
+	}()
+	return responseCh
+}
+
+func makeRequestAndProcessShift(dbConn *PgConn, request string, objectId int) chan responseShiftDB {
+	responseCh := make(chan responseShiftDB)
+	go func() {
+		response, err := dbConn.QueryDB(request, objectId)
 		if err != nil {
 			log.Error(err)
-			responseCh <- responseDB{err: err}
+			responseCh <- responseShiftDB{err: err}
 			return
 		}
-		responseCh <- responseDB{data: b, err: err}
+
+		shiftData, engData, mileage, mileageGPS, err := convertingQueryRowResultIntoStructure[RowShiftObjData](response)
+		if err != nil {
+			log.Error(err)
+			responseCh <- responseShiftDB{err: err}
+			return
+		}
+
+		shiftData.engHours = engData
+		shiftData.mileageData = mileage
+		shiftData.mileageGPSData = mileageGPS
+
+		responseCh <- responseShiftDB{data: shiftData, err: err}
 		defer response.Close()
 	}()
 	return responseCh

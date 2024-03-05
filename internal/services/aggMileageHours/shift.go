@@ -40,47 +40,73 @@ type ShiftObjData struct {
 	mileageGPSData  *mileageData // данные по пробегу по GPS за смену
 }
 
+func (s ShiftObjData) GetShiftId() int {
+	return s.Id
+}
+func (s ShiftObjData) GetShiftNum() int {
+	return s.NumShift
+}
+func (s ShiftObjData) GetShiftDateStart() time.Time {
+	return s.ShiftDateStart
+}
+func (s ShiftObjData) GetShiftDateEnd() time.Time {
+	return s.ShiftDateEnd
+}
+func (s ShiftObjData) GetShiftDate() time.Time {
+	return s.ShiftDate
+}
+func (s ShiftObjData) GetUpdatedTime() time.Time {
+	return s.UpdatedTime
+}
+func (s ShiftObjData) GetOffset() int64 {
+	return s.Offset
+}
+func (s ShiftObjData) GetCurrentDriverId() int {
+	return s.CurrentDriverId
+}
+func (s ShiftObjData) GetStatusLoaded() bool {
+	return s.Loaded
+}
+func (s ShiftObjData) GetEngHoursData() interface{} {
+	return *s.engHoursData
+}
+func (s ShiftObjData) GetMileageData() interface{} {
+	return *s.mileageData
+}
+func (s ShiftObjData) GetMileageGPSData() interface{} {
+	return *s.mileageGPSData
+}
+
 func (s *ShiftObjData) setShiftId(id int) {
 	s.Id = id
 }
 
 // метод для загрузки данных в структуру из интерфеса
-func (s *ShiftObjData) loadingData(data []byte) error {
-	unmData, err := decodingMesFromStorageToStruct[RowShiftObjData](data)
+func (s *ShiftObjData) loadingData(data interface{}) error {
+	shiftData, err := typeСonversion[dataShiftFromStorage](data)
 	if err != nil {
 		return err
 	}
 
-	s.Id = unmData.Id
-	s.NumShift = unmData.NumShift
-	s.ShiftDateStart = unmData.ShiftDateStart
-	s.ShiftDateEnd = unmData.ShiftDateEnd
-	s.ShiftDate = unmData.ShiftDate
-	s.UpdatedTime = unmData.UpdatedTime
-	s.Offset = unmData.Offset
-	s.CurrentDriverId = unmData.CurrentDriverId
-	s.Loaded = unmData.Loaded
-	s.engHoursData = &engHours{
-		engHoursStart:   unmData.EngHoursStart,
-		engHoursCurrent: unmData.EngHoursCurrent,
-		engHoursEnd:     unmData.EngHoursEnd,
+	s.Id = shiftData.GetShiftId()
+	s.NumShift = shiftData.GetShiftNum()
+	s.ShiftDateStart = shiftData.GetShiftDateStart()
+	s.ShiftDateEnd = shiftData.GetShiftDateEnd()
+	s.ShiftDate = shiftData.GetShiftDate()
+	s.UpdatedTime = shiftData.GetUpdatedTime()
+	s.Offset = shiftData.GetOffset()
+	s.CurrentDriverId = shiftData.GetCurrentDriverId()
+	s.Loaded = shiftData.GetStatusLoaded()
+
+	err = s.mileageData.loadingData(shiftData.GetMileageData())
+	if err != nil {
+		return err
 	}
-	s.mileageData = &mileageData{
-		mileageStart:                unmData.MileageStart,
-		mileageEnd:                  unmData.MileageEnd,
-		mileageCurrent:              unmData.MileageCurrent,
-		mileageLoaded:               unmData.MileageLoaded,
-		mileageAtBeginningOfLoading: unmData.MileageAtBeginningOfLoading,
-		mileageEmpty:                unmData.MileageEmpty,
+	err = s.mileageGPSData.loadingData(shiftData.GetMileageGPSData())
+	if err != nil {
+		return err
 	}
-	s.mileageGPSData = &mileageData{
-		mileageStart:                unmData.MileageGPSStart,
-		mileageEnd:                  unmData.MileageGPSEnd,
-		mileageCurrent:              unmData.MileageGPSCurrent,
-		mileageLoaded:               unmData.MileageGPSLoaded,
-		mileageAtBeginningOfLoading: unmData.MileageGPSAtBeginningOfLoading,
-		mileageEmpty:                unmData.MileageGPSEmpty,
-	}
+	err = s.engHoursData.loadingData(shiftData.GetEngHoursData())
 
 	return err
 }
@@ -120,39 +146,4 @@ func (s *ShiftObjData) updateShiftObjData(eventData *eventData, eventOffset int6
 	s.engHoursData.updateEngHours(eventData.engineHours)
 	s.mileageData.updateMileageData(eventData.mileage, objLoaded)
 	s.mileageGPSData.updateMileageData(eventData.gpsMileage, objLoaded)
-}
-
-// метод преобразует объект смены в json
-func (s *ShiftObjData) conversionToJson() ([]byte, error) {
-	trunsportStruct := RowShiftObjData{
-		Id:              s.Id,
-		NumShift:        s.NumShift,
-		ShiftDateStart:  s.ShiftDateStart,
-		ShiftDateEnd:    s.ShiftDateEnd,
-		ShiftDate:       s.ShiftDate,
-		UpdatedTime:     s.UpdatedTime,
-		Offset:          s.Offset,
-		CurrentDriverId: s.CurrentDriverId,
-		Loaded:          s.Loaded,
-		EngHoursStart:   s.engHoursData.engHoursStart,
-		EngHoursEnd:     s.engHoursData.engHoursEnd,
-		EngHoursCurrent: s.engHoursData.engHoursCurrent,
-
-		MileageStart:                s.mileageData.mileageStart,
-		MileageEnd:                  s.mileageData.mileageEnd,
-		MileageCurrent:              s.mileageData.mileageCurrent,
-		MileageLoaded:               s.mileageData.mileageLoaded,
-		MileageEmpty:                s.mileageData.mileageEmpty,
-		MileageAtBeginningOfLoading: s.mileageData.mileageAtBeginningOfLoading,
-
-		MileageGPSStart:                s.mileageGPSData.mileageStart,
-		MileageGPSEnd:                  s.mileageGPSData.mileageEnd,
-		MileageGPSCurrent:              s.mileageGPSData.mileageCurrent,
-		MileageGPSLoaded:               s.mileageGPSData.mileageLoaded,
-		MileageGPSEmpty:                s.mileageGPSData.mileageEmpty,
-		MileageGPSAtBeginningOfLoading: s.mileageGPSData.mileageAtBeginningOfLoading,
-	}
-
-	res, err := conversionToJson[RowShiftObjData](trunsportStruct)
-	return res, err
 }

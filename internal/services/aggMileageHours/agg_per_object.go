@@ -97,13 +97,11 @@ func (a *AggDataPerObject) restoringState(ctx context.Context) error {
 		return err
 	}
 
-	// будем считать, что все ошибки, которые вернутся
 	err = responseStorage.GetError()
 	if err != nil {
 		switch err.Error() {
 		case "error convert row to struct: no rows in result set":
-			// создание пустых объектов сессии и смены
-			// создание пустых объектов и дальнейшая работа с ними дожна производится в методе eventHandling
+			// нет данных для восстановления состояния
 			return nil
 		default:
 			// критическая ошибка
@@ -161,22 +159,11 @@ func (a *AggDataPerObject) eventHandling(ctx context.Context, eventData *eventDa
 	// обновление локальных объектов сессии и смены
 	a.updateObjects(eventData, eventOffset)
 
-	// формирование сообщения для модуля storage
-	shiftJsonData, errShiftConvert := a.shiftCurrentData.conversionToJson()
-	if errShiftConvert != nil {
-		// ошибки конвертации - это критические ошибки, они всегда требуют остановки программы
-		return errShiftConvert
-	}
-	sessionJsonData, errSessionConvert := a.sessionCurrentData.conversionToJson()
-	if errSessionConvert != nil {
-		return errSessionConvert
-	}
-
 	mes := mesForStorage{
 		typeMes:         typeMes,
 		objectID:        a.objectId,
-		shiftInitData:   shiftJsonData,
-		sessionInitData: sessionJsonData,
+		shiftInitData:   *a.shiftCurrentData,
+		sessionInitData: *a.sessionCurrentData,
 	}
 
 	// отправка сообщения в модуль storage (события будут обрабатываться по-разному, в зависимости от сообщения typeMes)
@@ -192,22 +179,18 @@ func (a *AggDataPerObject) eventHandling(ctx context.Context, eventData *eventDa
 
 	switch typeMes {
 	case addNewShiftAndSession:
-		shiftData, errDecodingShift := decodingMesFromStorageToStruct[RowShiftObjData](answerFromStorage.GetDataShift())
-		sessionData, errDecodingSession := decodingMesFromStorageToStruct[RowSessionObjData](answerFromStorage.GetDataDriverSession())
-		if errDecodingShift != nil || errDecodingSession != nil {
-			return utils.Wrapper(errDecodingShift, errDecodingSession)
-		}
-		a.sessionCurrentData.setSessionId(sessionData.SessionId)
-		a.sessionCurrentData.setShiftId(sessionData.ShiftId)
-		a.shiftCurrentData.setShiftId(shiftData.Id)
+
+		a.sessionCurrentData.setSessionId(0)
+		a.sessionCurrentData.setShiftId(0)
+		a.shiftCurrentData.setShiftId(0)
 		log.Debug()
 	case updateShiftAndAddNewSession:
-		sessionData, errDecodingSession := decodingMesFromStorageToStruct[RowSessionObjData](answerFromStorage.GetDataDriverSession())
-		if errDecodingSession != nil {
-			return errDecodingSession
-		}
-		a.sessionCurrentData.setSessionId(sessionData.SessionId)
-		log.Debug()
+		// sessionData, errDecodingSession := decodingMesFromStorageToStruct[RowSessionObjData](answerFromStorage.GetDataDriverSession())
+		// if errDecodingSession != nil {
+		// 	return errDecodingSession
+		// }
+		// a.sessionCurrentData.setSessionId(sessionData.SessionId)
+		// log.Debug()
 	case updateShiftAndSession:
 		log.Debug()
 	}
@@ -274,6 +257,7 @@ func (a *AggDataPerObject) attemptSendRequest(ctx context.Context, mes mesForSto
 //   - ctx: общий контекст обработчика событий
 //   - mes: сообщение которое нужно отправить в storage
 func (a *AggDataPerObject) processAndSendToStorage(ctx context.Context, mes mesForStorage) (incomingMessageFromStorage, error) {
+	// нужно разделить обработку и отправку сообщения
 	var err error
 	var answerData incomingMessageFromStorage
 

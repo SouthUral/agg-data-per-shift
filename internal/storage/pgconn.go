@@ -86,8 +86,8 @@ func (p *PgConn) closePoolConn() {
 }
 
 // метод для запросов в БД (любой запрос, который вернет данные)
-func (p *PgConn) QueryDB(query string, timeOut int, args ...any) (pgx.Rows, error) {
-	ctx, _ := context.WithTimeout(context.Background(), time.Duration(timeOut)*time.Second)
+func (p *PgConn) QueryDB(query string, args ...any) (pgx.Rows, error) {
+	ctx, _ := context.WithTimeout(context.Background(), p.timeOutQueryes*time.Second)
 
 	rows, err := p.dbpool.Query(ctx, query, args...)
 	if err != nil {

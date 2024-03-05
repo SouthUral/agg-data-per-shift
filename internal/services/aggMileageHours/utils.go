@@ -66,6 +66,16 @@ func сonversionAnswerStorage(answer interface{}) (incomingMessageFromStorage, e
 	return storageAnswer, err
 }
 
+// приводит переданный интерфейс к указанному типу
+func typeСonversion[T any](inputInterface interface{}) (T, error) {
+	var err error
+	resTypeData, ok := inputInterface.(T)
+	if !ok {
+		err = typeConversionError{}
+	}
+	return resTypeData, err
+}
+
 // функция сравнивания двух дат
 func comparingDates(dateFirst, dateSecond time.Time) bool {
 	t1 := time.Date(dateFirst.Year(), dateFirst.Month(), dateFirst.Day(), 0, 0, 0, 0, time.Local)
