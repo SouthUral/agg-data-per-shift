@@ -247,16 +247,12 @@ func makeRequestAndProcessSession(dbConn *PgConn, request string, objectId int) 
 			return
 		}
 
-		sessionData, engData, mileage, mileageGPS, err := convertingQueryRowResultIntoStructure[RowSessionObjData](response)
+		sessionData, err := converQuery[RowSessionObjData](response)
 		if err != nil {
 			log.Error(err)
 			responseCh <- responseSessionDB{err: err}
 			return
 		}
-
-		sessionData.engHours = engData
-		sessionData.mileageData = mileage
-		sessionData.mileageGPSData = mileageGPS
 
 		responseCh <- responseSessionDB{data: sessionData, err: err}
 		defer response.Close()
@@ -274,16 +270,16 @@ func makeRequestAndProcessShift(dbConn *PgConn, request string, objectId int) ch
 			return
 		}
 
-		shiftData, engData, mileage, mileageGPS, err := convertingQueryRowResultIntoStructure[RowShiftObjData](response)
+		shiftData, err := converQuery[RowShiftObjData](response)
 		if err != nil {
 			log.Error(err)
 			responseCh <- responseShiftDB{err: err}
 			return
 		}
 
-		shiftData.engHours = engData
-		shiftData.mileageData = mileage
-		shiftData.mileageGPSData = mileageGPS
+		// shiftData.engHours = engData
+		// shiftData.mileageData = mileage
+		// shiftData.mileageGPSData = mileageGPS
 
 		responseCh <- responseShiftDB{data: shiftData, err: err}
 		defer response.Close()

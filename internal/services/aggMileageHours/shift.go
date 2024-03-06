@@ -24,6 +24,13 @@ func initNewShift(event *eventData, numShift int, dateShift time.Time, eventOffs
 	return newShift
 }
 
+// функция создает структуру ShiftObjData на основании данных из БД
+func initNewShiftLoadingDBData(data interface{}) (*ShiftObjData, error) {
+	newShift := &ShiftObjData{}
+	err := newShift.loadingData(data)
+	return newShift, err
+}
+
 // данные смены по объекту техники
 type ShiftObjData struct {
 	Id              int          `json:"id"`                // id текущей смены
@@ -98,15 +105,15 @@ func (s *ShiftObjData) loadingData(data interface{}) error {
 	s.CurrentDriverId = shiftData.GetCurrentDriverId()
 	s.Loaded = shiftData.GetStatusLoaded()
 
-	err = s.mileageData.loadingData(shiftData.GetMileageData())
+	s.mileageData, err = initNewMileageDataLoadingDBData(shiftData.GetMileageData())
 	if err != nil {
 		return err
 	}
-	err = s.mileageGPSData.loadingData(shiftData.GetMileageGPSData())
+	s.mileageGPSData, err = initNewMileageDataLoadingDBData(shiftData.GetMileageGPSData())
 	if err != nil {
 		return err
 	}
-	err = s.engHoursData.loadingData(shiftData.GetEngHoursData())
+	s.engHoursData, err = initEngHoursLoadingDBData(shiftData.GetEngHoursData())
 
 	return err
 }

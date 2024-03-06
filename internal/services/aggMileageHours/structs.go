@@ -85,6 +85,13 @@ func initNewMileageData(eventData *eventData) *mileageData {
 	return newMileageData
 }
 
+// функция создает структуру mileageData на основании данных из БД
+func initNewMileageDataLoadingDBData(data interface{}) (*mileageData, error) {
+	newMileageData := &mileageData{}
+	err := newMileageData.loadingData(data)
+	return newMileageData, err
+}
+
 // данные по пробегу за смену/сессию
 type mileageData struct {
 	mileageStart                int // пробег на начало (смены/сессии)
@@ -167,6 +174,13 @@ func initNewEngHours(eventData *eventData) *engHours {
 		engHoursCurrent: 0,
 	}
 	return engHours
+}
+
+// функция создает структуру engHours на основании данных из БД
+func initEngHoursLoadingDBData(data interface{}) (*engHours, error) {
+	newEngHours := &engHours{}
+	err := newEngHours.loadingData(data)
+	return newEngHours, err
 }
 
 // данные по моточасам за смену/сессию

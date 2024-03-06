@@ -22,6 +22,13 @@ func initNewSession(event *eventData, eventOffset int64) *sessionDriverData {
 	return newShift
 }
 
+// функция создает новую сессию на основании данных из БД
+func initNewSessionLoadingDBData(data interface{}) (*sessionDriverData, error) {
+	newSession := &sessionDriverData{}
+	err := newSession.loadingData(data)
+	return newSession, err
+}
+
 // данные по сессии водителя в смене
 type sessionDriverData struct {
 	shiftId           int          // id смены, в которой находится сессия
@@ -90,15 +97,15 @@ func (s *sessionDriverData) loadingData(data interface{}) error {
 	s.timeUpdateSession = sData.GetTimeUpdateSession()
 	s.avSpeed = sData.GetAvSpeed()
 
-	err = s.mileageData.loadingData(sData.GetMileageData())
+	s.mileageData, err = initNewMileageDataLoadingDBData(sData.GetMileageData())
 	if err != nil {
 		return err
 	}
-	err = s.mileageGPSData.loadingData(sData.GetMileageGPSData())
+	s.mileageGPSData, err = initNewMileageDataLoadingDBData(sData.GetMileageGPSData())
 	if err != nil {
 		return err
 	}
-	err = s.engHoursData.loadingData(sData.GetEngHoursData())
+	s.engHoursData, err = initEngHoursLoadingDBData(sData.GetEngHoursData())
 
 	return err
 }

@@ -15,6 +15,7 @@ require (
 )
 
 require (
+	github.com/georgysavva/scany/v2 v2.1.0
 	github.com/golang/snappy v0.0.4 // indirect
 	github.com/jackc/pgx/v5 v5.5.3
 	github.com/klauspost/compress v1.17.1 // indirect

@@ -8,36 +8,10 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// функция преобразует результат запроса в виде pgx.Rows в структуру типа T.
-// функция обрабатывает только одну строку из запроса.
-func convertingQueryRowResultIntoStructure[T any](rows pgx.Rows) (T, EngHoursObjData, MileageObjData, MileageObjGPSData, error) {
-	var (
-		mainData   T
-		engData    EngHoursObjData
-		mileage    MileageObjData
-		mileageGPS MileageObjGPSData
-		err        error
-	)
-	mainData, err = converQuery[T](rows)
-	if err != nil {
-		return mainData, engData, mileage, mileageGPS, err
-	}
-	engData, err = converQuery[EngHoursObjData](rows)
-	if err != nil {
-		return mainData, engData, mileage, mileageGPS, err
-	}
-	mileage, err = converQuery[MileageObjData](rows)
-	if err != nil {
-		return mainData, engData, mileage, mileageGPS, err
-	}
-	mileageGPS, err = converQuery[MileageObjGPSData](rows)
-	return mainData, engData, mileage, mileageGPS, err
-}
-
 func converQuery[T any](rows pgx.Rows) (T, error) {
 	var rowObj T
 
-	rowObj, err := pgx.CollectOneRow[T](rows, pgx.RowToStructByName[T])
+	rowObj, err := pgx.CollectOneRow(rows, pgx.RowToStructByName[T])
 	if err != nil {
 		noRows := noRowsError{}
 		if err.Error() == noRows.Error() {
@@ -56,6 +30,9 @@ func handlingErrors(errors ...error) (string, error) {
 	var typeCriticalErr string
 	var err error
 	for _, err = range errors {
+		if err == nil {
+			continue
+		}
 		typeCriticalErr, err = defineTypeErrors(err)
 		switch typeCriticalErr {
 		case criticalError:

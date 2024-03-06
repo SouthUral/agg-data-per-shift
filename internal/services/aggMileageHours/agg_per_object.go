@@ -3,6 +3,7 @@ package aggmileagehours
 import (
 	"context"
 	"errors"
+	"math"
 	"time"
 
 	utils "agg-data-per-shift/pkg/utils"
@@ -55,6 +56,13 @@ func initAggDataPerObject(objectId, numAttemptRequest, timeWaitResponse int, set
 func (a *AggDataPerObject) gettingEvents(ctx context.Context) {
 	defer log.Warningf("gettingEvents for objectId: %d has finished", a.objectId)
 
+	// восстановление состояния
+	err := a.restoringState(ctx)
+	if err != nil {
+		log.Error(err)
+		return
+	}
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -62,22 +70,13 @@ func (a *AggDataPerObject) gettingEvents(ctx context.Context) {
 		case msg := <-a.incomingCh:
 			// если offset событий меньше текущего offset тогда событие игнорируется
 			if msg.offset > a.lastOffset {
-				// если состояние не восстановлено (объект был только что создан) то восстанавливаем состояние
-				// на время восстановления горутина блокируется, сообщения собираются в канале
-				if !a.stateRestored {
-					err := a.restoringState(ctx)
-					if err != nil {
-						log.Error(err)
-						return
-					}
-
-				}
 				err := a.eventHandling(ctx, msg.eventData, msg.offset)
 				if err != nil {
 					log.Error(err)
 					return
 				}
 			}
+			log.Debugf("сообщение с offset: %d пропущено, текущий offset объекта: %d", msg.offset, a.lastOffset)
 		}
 	}
 }
@@ -103,7 +102,7 @@ func (a *AggDataPerObject) restoringState(ctx context.Context) error {
 	if err != nil {
 		switch err.Error() {
 		case "error convert row to struct: no rows in result set":
-			// нет данных для восстановления состояния
+			log.Debugf("нет данных для восстановления объекта %d", a.objectId)
 			return nil
 		default:
 			// критическая ошибка
@@ -113,14 +112,19 @@ func (a *AggDataPerObject) restoringState(ctx context.Context) error {
 	}
 
 	// проверка ошибок конвертации
-	errDecodeShift := a.shiftCurrentData.loadingData(responseStorage.GetDataShift())
-	errDecodeSession := a.sessionCurrentData.loadingData(responseStorage.GetDataDriverSession())
+	shift, errDecodeShift := initNewShiftLoadingDBData(responseStorage.GetDataShift())
+	session, errDecodeSession := initNewSessionLoadingDBData(responseStorage.GetDataDriverSession())
 	if errDecodeShift != nil || errDecodeSession != nil {
 		err = utils.Wrapper(restoringStateError{}, errDecodeShift)
 		return err
 	}
-	// флаг переводится в состояние true в случает если данные были получены из БД и успешно записаны в локальные структуры
+
+	a.shiftCurrentData = shift
+	a.sessionCurrentData = session
 	a.stateRestored = true
+	log.Debugf("данные для объекта: %d восстановлены", a.objectId)
+	a.lastOffset = int64(math.Min(float64(a.sessionCurrentData.offset), float64(a.sessionCurrentData.offset)))
+	log.Debugf("offset для объекта: %d установлен: %d", a.objectId, a.lastOffset)
 
 	return err
 }
@@ -199,6 +203,9 @@ func (a *AggDataPerObject) eventHandling(ctx context.Context, eventData *eventDa
 	case updateShiftAndSession:
 		log.Debug()
 	}
+
+	// TODO: нужно установить значение текущего offset на тот который был добавлен в БД
+	a.lastOffset = eventOffset
 
 	return err
 }
