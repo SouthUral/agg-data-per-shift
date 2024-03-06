@@ -17,6 +17,13 @@ type incomingMessageFromStorage interface {
 	GetError() error                   // возращает ошибку
 }
 
+// интерфейс для получения ответа от Storage на запрос добавления новый записей в таблицу смены и сессий
+type responceStorageToAddNewShiftAndSession interface {
+	GetShiftId() int
+	GetSessionId() int
+	GetError() error
+}
+
 // данные смены
 type dataShiftFromStorage interface {
 	GetShiftId() int  // возвращает Id смены (индентификатор в таблице БД)

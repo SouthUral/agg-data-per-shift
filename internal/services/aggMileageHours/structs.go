@@ -95,6 +95,25 @@ type mileageData struct {
 	mileageEmpty                int // пробег в порожнем состоянии
 }
 
+func (m mileageData) GetMileageStart() int {
+	return m.mileageStart
+}
+func (m mileageData) GetMileageCurrent() int {
+	return m.mileageCurrent
+}
+func (m mileageData) GetMileageEnd() int {
+	return m.mileageEnd
+}
+func (m mileageData) GetMileageLoaded() int {
+	return m.mileageLoaded
+}
+func (m mileageData) GetMileageAtBeginningOfLoading() int {
+	return m.mileageAtBeginningOfLoading
+}
+func (m mileageData) GetMileageEmpty() int {
+	return m.mileageEmpty
+}
+
 func (m *mileageData) loadingData(data interface{}) error {
 	mData, err := typeСonversion[mileageDataInterface](data)
 	if err != nil {
@@ -155,6 +174,16 @@ type engHours struct {
 	engHoursStart   float32 // моточасы на начало
 	engHoursCurrent float32 // последняя обновленноая запись моточасов
 	engHoursEnd     float32 // моточасы на конец
+}
+
+func (e engHours) GetEngHoursStart() float32 {
+	return e.engHoursStart
+}
+func (e engHours) GetEngHoursCurrent() float32 {
+	return e.engHoursCurrent
+}
+func (e engHours) GetEngHoursEnd() float32 {
+	return e.engHoursEnd
 }
 
 func (e *engHours) loadingData(data interface{}) error {

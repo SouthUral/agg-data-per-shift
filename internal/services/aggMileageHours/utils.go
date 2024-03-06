@@ -55,10 +55,10 @@ func timeConversion(date string) (time.Time, error) {
 	return resTime, err
 }
 
-// функция для преобразования ответа от модуля storage в интерфейс incomingMessageFromStorage
-func сonversionAnswerStorage(answer interface{}) (incomingMessageFromStorage, error) {
+// функция для преобразования ответа от модуля storage в интерфейс
+func сonversionAnswerStorage[T any](responce interface{}) (T, error) {
 
-	storageAnswer, err := utils.TypeConversion[incomingMessageFromStorage](answer)
+	storageAnswer, err := utils.TypeConversion[T](responce)
 	if err != nil {
 		err = utils.Wrapper(typeConversionAnswerStorageDataError{}, err)
 	}

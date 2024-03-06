@@ -84,7 +84,9 @@ func (a *AggDataPerObject) gettingEvents(ctx context.Context) {
 
 // метод восстановления состояния
 func (a *AggDataPerObject) restoringState(ctx context.Context) error {
-	// TODO: примечание, если в БД не было записей, то нужно сгенерировать новую смену и сессию
+	defer log.Warning("restoringState has been closed")
+	log.Debugf("Восстановление состояния объекта: %d", a.objectId)
+
 	mes := mesForStorage{
 		typeMes:  restoreShiftDataPerObj,
 		objectID: a.objectId,
@@ -125,6 +127,7 @@ func (a *AggDataPerObject) restoringState(ctx context.Context) error {
 
 // метод обрабатывает событие:
 func (a *AggDataPerObject) eventHandling(ctx context.Context, eventData *eventData, eventOffset int64) error {
+	log.Debugf("Обработка сообщения для объекта: %d", a.objectId)
 	var err error
 	typeMes := updateShiftAndSession
 
@@ -137,8 +140,6 @@ func (a *AggDataPerObject) eventHandling(ctx context.Context, eventData *eventDa
 
 	// создание смены, если она не была восстановлена (отсутствовали данные в БД)
 	if !a.stateRestored {
-		// все данные для создания смены берутся из события
-		// остальные ветки игнорируются
 		typeMes = addNewShiftAndSession
 		a.shiftCurrentData = initNewShift(eventData, numShift, dateShift, eventOffset)
 		a.sessionCurrentData = initNewSession(eventData, eventOffset)
@@ -167,23 +168,27 @@ func (a *AggDataPerObject) eventHandling(ctx context.Context, eventData *eventDa
 	}
 
 	// отправка сообщения в модуль storage (события будут обрабатываться по-разному, в зависимости от сообщения typeMes)
-	answerFromStorage, err := a.processAndSendToStorage(ctx, mes)
+	responceStorage, err := a.sendingMesToStorage(ctx, mes, a.timeWaitResponseStorage)
 	if err != nil {
 		return err
 	}
 
-	errStorage := answerFromStorage.GetError()
-	if errStorage != nil {
-		return errStorage
-	}
-
 	switch typeMes {
 	case addNewShiftAndSession:
+		responceData, err := сonversionAnswerStorage[responceStorageToAddNewShiftAndSession](responceStorage)
+		if err != nil {
+			// ошибка конвертации
+			return err
+		}
+		if responceData.GetError() != nil {
+			// ошибка в storage
+			return err
+		}
 
-		a.sessionCurrentData.setSessionId(0)
-		a.sessionCurrentData.setShiftId(0)
-		a.shiftCurrentData.setShiftId(0)
-		log.Debug()
+		a.sessionCurrentData.setSessionId(responceData.GetSessionId())
+		a.sessionCurrentData.setShiftId(responceData.GetShiftId())
+		a.shiftCurrentData.setShiftId(responceData.GetShiftId())
+		log.Debug("добавление новых записей смены и сессии успешно завершено")
 	case updateShiftAndAddNewSession:
 		// sessionData, errDecodingSession := decodingMesFromStorageToStruct[RowSessionObjData](answerFromStorage.GetDataDriverSession())
 		// if errDecodingSession != nil {
@@ -267,7 +272,7 @@ func (a *AggDataPerObject) processAndSendToStorage(ctx context.Context, mes mesF
 		return answerData, err
 	}
 
-	answerData, err = сonversionAnswerStorage(answer)
+	answerData, err = сonversionAnswerStorage[incomingMessageFromStorage](answer)
 	if err != nil {
 		err = utils.Wrapper(processAndSendToStorageError{}, err)
 	}

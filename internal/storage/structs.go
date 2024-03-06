@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"fmt"
 	"time"
 
 	utils "agg-data-per-shift/pkg/utils"
@@ -236,19 +237,27 @@ type shiftDataFromModule struct {
 }
 
 func (s *shiftDataFromModule) loadData(data interface{}) error {
-	shiftInterface, err := utils.TypeConversion[dataShiftFromStorage](data)
+	var err error
+	s.mainData, err = utils.TypeConversion[dataShiftFromStorage](data)
 	if err != nil {
+		err := utils.Wrapper(fmt.Errorf("ошибка конвертации основных данных"), err)
 		return err
 	}
-	s.engHoursData, err = utils.TypeConversion[engHoursDataInterface](shiftInterface.GetEngHoursData())
+	s.engHoursData, err = utils.TypeConversion[engHoursDataInterface](s.mainData.GetEngHoursData())
 	if err != nil {
+		err := utils.Wrapper(fmt.Errorf("ошибка данных по моточасам"), err)
 		return err
 	}
-	s.mileageData, err = utils.TypeConversion[mileageDataInterface](shiftInterface.GetMileageData())
+	s.mileageData, err = utils.TypeConversion[mileageDataInterface](s.mainData.GetMileageData())
 	if err != nil {
+		err := utils.Wrapper(fmt.Errorf("ошибка данных по пробегу"), err)
 		return err
 	}
-	s.mileageGPSData, err = utils.TypeConversion[mileageDataInterface](shiftInterface.GetMileageGPSData())
+	s.mileageGPSData, err = utils.TypeConversion[mileageDataInterface](s.mainData.GetMileageGPSData())
+	if err != nil {
+		err := utils.Wrapper(fmt.Errorf("ошибка данных по пробегу GPS"), err)
+		return err
+	}
 	return err
 }
 
@@ -261,18 +270,19 @@ type sessionDataFromModule struct {
 }
 
 func (s *sessionDataFromModule) loadData(data interface{}) error {
-	shiftInterface, err := utils.TypeConversion[dataDriverSessionFromStorage](data)
+	var err error
+	s.mainData, err = utils.TypeConversion[dataDriverSessionFromStorage](data)
 	if err != nil {
 		return err
 	}
-	s.engHoursData, err = utils.TypeConversion[engHoursDataInterface](shiftInterface.GetEngHoursData())
+	s.engHoursData, err = utils.TypeConversion[engHoursDataInterface](s.mainData.GetEngHoursData())
 	if err != nil {
 		return err
 	}
-	s.mileageData, err = utils.TypeConversion[mileageDataInterface](shiftInterface.GetMileageData())
+	s.mileageData, err = utils.TypeConversion[mileageDataInterface](s.mainData.GetMileageData())
 	if err != nil {
 		return err
 	}
-	s.mileageGPSData, err = utils.TypeConversion[mileageDataInterface](shiftInterface.GetMileageGPSData())
+	s.mileageGPSData, err = utils.TypeConversion[mileageDataInterface](s.mainData.GetMileageGPSData())
 	return err
 }

@@ -74,7 +74,7 @@ func (s *StorageMessageHandler) handlerMesAggMileageHours(ctx context.Context, m
 
 	switch mes.GetType() {
 	case restoreShiftDataPerObj:
-		log.Infof("принято сообщения от обработчика объекта: %d", mes.GetObjID())
+		log.Debugf("восстановление состояния для объекта: %d", mes.GetObjID())
 		// обработка сообщения восстановления состояния
 		response := s.handlerRestoreShiftDataPerObj(ctx, mes.GetObjID())
 		// нужно обработать ошибки
@@ -94,17 +94,22 @@ func (s *StorageMessageHandler) handlerMesAggMileageHours(ctx context.Context, m
 			sessionData: response.responseSession.data,
 
 			err: responseErr,
-			// модуль должен возвращать только критические ошибки
-			// ошибка связанная с подключением не является критической
-			// ошибка связанная с отсутствием значений в rows тоже не является критической
 		}
 		message.GetChForResponse() <- answer
 		log.Infof("Ответ отправлен, ObjID: %d", mes.GetObjID())
 	case addNewShiftAndSession:
-		// обработка сообщения добавление новых смены и сессии
-		// ответом будет id смены и id сессии
-		s.handlerAddNewShiftAndSession(mes.GetShiftData(), mes.GetSessionData())
-
+		log.Debugf("Добавление новых записей смены и сессии для объекта: %d", mes.GetObjID())
+		shiftId, sessionId, err := s.handlerAddNewShiftAndSession(mes.GetObjID(), mes.GetShiftData(), mes.GetSessionData())
+		// возможно придется добавить обработку ошибок
+		if err != nil {
+			log.Error(err)
+			s.Shutdown(err)
+			return
+		}
+		message.GetChForResponse() <- responceAggMileageHoursAddNewShiftAndSession{
+			shiftId:   shiftId,
+			sessionId: sessionId,
+		}
 	case updateShiftAndAddNewSession:
 		// обработка сообщения, обновление смены и добавление новой сессии
 		// ответом будет id сессии
@@ -150,24 +155,84 @@ func (s *StorageMessageHandler) handlerRestoreShiftDataPerObj(ctx context.Contex
 	}
 }
 
-func (s *StorageMessageHandler) handlerAddNewShiftAndSession(shiftData, sessionData interface{}) error {
-	// TODO: нужно преобразовать данные по смене и по сессии в структуры
-	// Сформировать запрос в БД, одновременно данные внести не получится, т.к нужен id смены для записи сессии
-	// сначала инсертить смену, получить id затем инсертить сессию
+func (s *StorageMessageHandler) handlerAddNewShiftAndSession(objId int, shiftData, sessionData interface{}) (int, int, error) {
+	var (
+		shifId, sessionId int
+	)
+
 	shiftStructData := shiftDataFromModule{}
 	sessionStructData := sessionDataFromModule{}
 
 	err := shiftStructData.loadData(shiftData)
 	if err != nil {
-		return err
+		err = utils.Wrapper(fmt.Errorf("ошибка конвертации смены"), err)
+		return shifId, sessionId, err
 	}
 	err = sessionStructData.loadData(sessionData)
 	if err != nil {
-		return err
+		err = utils.Wrapper(fmt.Errorf("ошибка конвертации сессии"), err)
+		return shifId, sessionId, err
 	}
 
-	return err
-
+	err = s.dbConn.QueryRowDB(addNewShift,
+		shiftStructData.mainData.GetShiftNum(),
+		objId,
+		shiftStructData.mainData.GetShiftDateStart(),
+		shiftStructData.mainData.GetShiftDateEnd(),
+		shiftStructData.mainData.GetShiftDate(),
+		shiftStructData.mainData.GetUpdatedTime(),
+		shiftStructData.mainData.GetOffset(),
+		shiftStructData.mainData.GetCurrentDriverId(),
+		shiftStructData.mainData.GetStatusLoaded(),
+		shiftStructData.engHoursData.GetEngHoursStart(),
+		shiftStructData.engHoursData.GetEngHoursCurrent(),
+		shiftStructData.engHoursData.GetEngHoursEnd(),
+		shiftStructData.mileageData.GetMileageStart(),
+		shiftStructData.mileageData.GetMileageCurrent(),
+		shiftStructData.mileageData.GetMileageEnd(),
+		shiftStructData.mileageData.GetMileageLoaded(),
+		shiftStructData.mileageData.GetMileageAtBeginningOfLoading(),
+		shiftStructData.mileageData.GetMileageEmpty(),
+		shiftStructData.mileageGPSData.GetMileageStart(),
+		shiftStructData.mileageGPSData.GetMileageCurrent(),
+		shiftStructData.mileageGPSData.GetMileageEnd(),
+		shiftStructData.mileageGPSData.GetMileageLoaded(),
+		shiftStructData.mileageGPSData.GetMileageAtBeginningOfLoading(),
+		shiftStructData.mileageGPSData.GetMileageEmpty(),
+	).Scan(&shifId)
+	if err != nil {
+		return shifId, sessionId, err
+	}
+	log.Debugf("объект смены записан в БД id смены: %d", shifId)
+	err = s.dbConn.QueryRowDB(addNewSession,
+		shifId,
+		objId,
+		sessionStructData.mainData.GetDriverId(),
+		sessionStructData.mainData.GetOffset(),
+		sessionStructData.mainData.GetTimeStartSession(),
+		sessionStructData.mainData.GetTimeUpdateSession(),
+		sessionStructData.mainData.GetAvSpeed(),
+		sessionStructData.engHoursData.GetEngHoursStart(),
+		sessionStructData.engHoursData.GetEngHoursCurrent(),
+		sessionStructData.engHoursData.GetEngHoursEnd(),
+		sessionStructData.mileageData.GetMileageStart(),
+		sessionStructData.mileageData.GetMileageCurrent(),
+		sessionStructData.mileageData.GetMileageEnd(),
+		sessionStructData.mileageData.GetMileageLoaded(),
+		sessionStructData.mileageData.GetMileageAtBeginningOfLoading(),
+		sessionStructData.mileageData.GetMileageEmpty(),
+		sessionStructData.mileageGPSData.GetMileageStart(),
+		sessionStructData.mileageGPSData.GetMileageCurrent(),
+		sessionStructData.mileageGPSData.GetMileageEnd(),
+		sessionStructData.mileageGPSData.GetMileageLoaded(),
+		sessionStructData.mileageGPSData.GetMileageAtBeginningOfLoading(),
+		sessionStructData.mileageGPSData.GetMileageEmpty(),
+	).Scan(&sessionId)
+	if err != nil {
+		return shifId, sessionId, err
+	}
+	log.Debugf("объект cессии записан в БД id смены: %d", shifId)
+	return shifId, sessionId, err
 }
 
 // функция отправляет запрос в БД, получает ответ, конвертирует его в переданный тип, и из типа конвертирует его в json.
