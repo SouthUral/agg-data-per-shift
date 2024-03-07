@@ -15,6 +15,13 @@ type StorageMessageHandler struct {
 	cancel     func()
 }
 
+// метод прекращает работу модуля psql (завершает все активные горутины, разрывает коннект с БД)
+func (s *StorageMessageHandler) Shutdown(err error) {
+	log.Errorf("psql is terminated for a reason: %s", err)
+	s.cancel()
+	s.dbConn.Shutdown(utils.Wrapper(fmt.Errorf("psql is terminated"), err))
+}
+
 func (s *StorageMessageHandler) GetStorageCh() chan interface{} {
 	return s.incomingCh
 }
@@ -89,14 +96,14 @@ func (s *StorageMessageHandler) handlerMesAggMileageHours(ctx context.Context, m
 			log.Error(err)
 			responseErr = err
 		}
-		answer := answerForAggMileageHours{
+		responce := answerForAggMileageHours{
 			shiftData:   response.responseShift.data,
 			sessionData: response.responseSession.data,
 
 			err: responseErr,
 		}
-		message.GetChForResponse() <- answer
-		log.Infof("Ответ отправлен, ObjID: %d", mes.GetObjID())
+		message.GetChForResponse() <- responce
+		log.Infof("Ответ по восстановлению состояния отправлен, ObjID: %d", mes.GetObjID())
 	case addNewShiftAndSession:
 		log.Debugf("Добавление новых записей смены и сессии для объекта: %d", mes.GetObjID())
 		shiftId, sessionId, err := s.handlerAddNewShiftAndSession(mes.GetObjID(), mes.GetShiftData(), mes.GetSessionData())
@@ -111,13 +118,27 @@ func (s *StorageMessageHandler) handlerMesAggMileageHours(ctx context.Context, m
 			sessionId: sessionId,
 		}
 	case updateShiftAndAddNewSession:
-		// обработка сообщения, обновление смены и добавление новой сессии
-		// ответом будет id сессии
-
+		log.Debugf("Добавление новой записи сессии, обновление записи смены для объекта : %d", mes.GetObjID())
+		sessionId, err := s.handlerUpdateShiftAndAddNewSession(mes.GetObjID(), mes.GetShiftData(), mes.GetSessionData())
+		if err != nil {
+			log.Error(err)
+			s.Shutdown(err)
+			return
+		}
+		message.GetChForResponse() <- responceAggMileageHoursAddNewShiftAndSession{
+			sessionId: sessionId,
+		}
 	case updateShiftAndSession:
-		// обработка сообщения, обновления смены и сессии
-		// ответ не нужен (пока)
-
+		err := s.handlerUpdateShiftAndSession(mes.GetShiftData(), mes.GetSessionData())
+		if err != nil {
+			log.Error(err)
+			s.Shutdown(err)
+			return
+		}
+		// пока это бесполезное действие, т.к. ошибка все равно не отправится обратно, т.к. программа завершится
+		message.GetChForResponse() <- responceAggMileageHoursAddNewShiftAndSession{
+			err: err,
+		}
 	default:
 		log.Error("an unknown message type was received")
 	}
@@ -173,66 +194,66 @@ func (s *StorageMessageHandler) handlerAddNewShiftAndSession(objId int, shiftDat
 		err = utils.Wrapper(fmt.Errorf("ошибка конвертации сессии"), err)
 		return shifId, sessionId, err
 	}
-
-	err = s.dbConn.QueryRowDB(addNewShift,
-		shiftStructData.mainData.GetShiftNum(),
-		objId,
-		shiftStructData.mainData.GetShiftDateStart(),
-		shiftStructData.mainData.GetShiftDateEnd(),
-		shiftStructData.mainData.GetShiftDate(),
-		shiftStructData.mainData.GetUpdatedTime(),
-		shiftStructData.mainData.GetOffset(),
-		shiftStructData.mainData.GetCurrentDriverId(),
-		shiftStructData.mainData.GetStatusLoaded(),
-		shiftStructData.engHoursData.GetEngHoursStart(),
-		shiftStructData.engHoursData.GetEngHoursCurrent(),
-		shiftStructData.engHoursData.GetEngHoursEnd(),
-		shiftStructData.mileageData.GetMileageStart(),
-		shiftStructData.mileageData.GetMileageCurrent(),
-		shiftStructData.mileageData.GetMileageEnd(),
-		shiftStructData.mileageData.GetMileageLoaded(),
-		shiftStructData.mileageData.GetMileageAtBeginningOfLoading(),
-		shiftStructData.mileageData.GetMileageEmpty(),
-		shiftStructData.mileageGPSData.GetMileageStart(),
-		shiftStructData.mileageGPSData.GetMileageCurrent(),
-		shiftStructData.mileageGPSData.GetMileageEnd(),
-		shiftStructData.mileageGPSData.GetMileageLoaded(),
-		shiftStructData.mileageGPSData.GetMileageAtBeginningOfLoading(),
-		shiftStructData.mileageGPSData.GetMileageEmpty(),
-	).Scan(&shifId)
+	err = s.makeRquestAddNewShift(shiftStructData, objId, &shifId)
 	if err != nil {
 		return shifId, sessionId, err
 	}
-	log.Debugf("объект смены записан в БД id смены: %d", shifId)
-	err = s.dbConn.QueryRowDB(addNewSession,
-		shifId,
-		objId,
-		sessionStructData.mainData.GetDriverId(),
-		sessionStructData.mainData.GetOffset(),
-		sessionStructData.mainData.GetTimeStartSession(),
-		sessionStructData.mainData.GetTimeUpdateSession(),
-		sessionStructData.mainData.GetAvSpeed(),
-		sessionStructData.engHoursData.GetEngHoursStart(),
-		sessionStructData.engHoursData.GetEngHoursCurrent(),
-		sessionStructData.engHoursData.GetEngHoursEnd(),
-		sessionStructData.mileageData.GetMileageStart(),
-		sessionStructData.mileageData.GetMileageCurrent(),
-		sessionStructData.mileageData.GetMileageEnd(),
-		sessionStructData.mileageData.GetMileageLoaded(),
-		sessionStructData.mileageData.GetMileageAtBeginningOfLoading(),
-		sessionStructData.mileageData.GetMileageEmpty(),
-		sessionStructData.mileageGPSData.GetMileageStart(),
-		sessionStructData.mileageGPSData.GetMileageCurrent(),
-		sessionStructData.mileageGPSData.GetMileageEnd(),
-		sessionStructData.mileageGPSData.GetMileageLoaded(),
-		sessionStructData.mileageGPSData.GetMileageAtBeginningOfLoading(),
-		sessionStructData.mileageGPSData.GetMileageEmpty(),
-	).Scan(&sessionId)
+	err = s.makeRquestAddNewSession(sessionStructData, objId, shifId, &sessionId)
 	if err != nil {
 		return shifId, sessionId, err
 	}
-	log.Debugf("объект cессии записан в БД id смены: %d", shifId)
 	return shifId, sessionId, err
+}
+
+func (s *StorageMessageHandler) handlerUpdateShiftAndAddNewSession(objId int, shiftData, sessionData interface{}) (int, error) {
+	var (
+		sessionId int
+	)
+
+	shiftStructData := shiftDataFromModule{}
+	sessionStructData := sessionDataFromModule{}
+
+	err := shiftStructData.loadData(shiftData)
+	if err != nil {
+		err = utils.Wrapper(fmt.Errorf("ошибка конвертации смены"), err)
+		return sessionId, err
+	}
+	err = sessionStructData.loadData(sessionData)
+	if err != nil {
+		err = utils.Wrapper(fmt.Errorf("ошибка конвертации сессии"), err)
+		return sessionId, err
+	}
+	err = s.makeRquestAddNewSession(sessionStructData, objId, shiftStructData.mainData.GetShiftId(), &sessionId)
+	if err != nil {
+		return sessionId, err
+	}
+	err = s.makeRequestUpdateShift(shiftStructData)
+	if err != nil {
+		return sessionId, err
+	}
+	return sessionId, err
+}
+
+func (s *StorageMessageHandler) handlerUpdateShiftAndSession(shiftData, sessionData interface{}) error {
+	shiftStructData := shiftDataFromModule{}
+	sessionStructData := sessionDataFromModule{}
+
+	err := shiftStructData.loadData(shiftData)
+	if err != nil {
+		err = utils.Wrapper(fmt.Errorf("ошибка конвертации смены"), err)
+		return err
+	}
+	err = sessionStructData.loadData(sessionData)
+	if err != nil {
+		err = utils.Wrapper(fmt.Errorf("ошибка конвертации сессии"), err)
+		return err
+	}
+	err = s.makeRequestUpdateShift(shiftStructData)
+	if err != nil {
+		return err
+	}
+	err = s.makeRequestUpdateSession(sessionStructData)
+	return err
 }
 
 // функция отправляет запрос в БД, получает ответ, конвертирует его в переданный тип, и из типа конвертирует его в json.
@@ -287,9 +308,127 @@ func makeRequestAndProcessShift(dbConn *PgConn, request string, objectId int) ch
 	return responseCh
 }
 
-// метод прекращает работу модуля psql (завершает все активные горутины, разрывает коннект с БД)
-func (s *StorageMessageHandler) Shutdown(err error) {
-	log.Errorf("psql is terminated for a reason: %s", err)
-	s.cancel()
-	s.dbConn.Shutdown(utils.Wrapper(fmt.Errorf("psql is terminated"), err))
+// метод делает запрос в БД на добавлении новой смены в таблицу
+func (s *StorageMessageHandler) makeRquestAddNewShift(shiftStructData shiftDataFromModule, objId int, shifId *int) error {
+	err := s.dbConn.QueryRowDB(addNewShift,
+		shiftStructData.mainData.GetShiftNum(),
+		objId,
+		shiftStructData.mainData.GetShiftDateStart(),
+		shiftStructData.mainData.GetShiftDateEnd(),
+		shiftStructData.mainData.GetShiftDate(),
+		shiftStructData.mainData.GetUpdatedTime(),
+		shiftStructData.mainData.GetOffset(),
+		shiftStructData.mainData.GetCurrentDriverId(),
+		shiftStructData.mainData.GetStatusLoaded(),
+		shiftStructData.engHoursData.GetEngHoursStart(),
+		shiftStructData.engHoursData.GetEngHoursCurrent(),
+		shiftStructData.engHoursData.GetEngHoursEnd(),
+		shiftStructData.mileageData.GetMileageStart(),
+		shiftStructData.mileageData.GetMileageCurrent(),
+		shiftStructData.mileageData.GetMileageEnd(),
+		shiftStructData.mileageData.GetMileageLoaded(),
+		shiftStructData.mileageData.GetMileageAtBeginningOfLoading(),
+		shiftStructData.mileageData.GetMileageEmpty(),
+		shiftStructData.mileageGPSData.GetMileageStart(),
+		shiftStructData.mileageGPSData.GetMileageCurrent(),
+		shiftStructData.mileageGPSData.GetMileageEnd(),
+		shiftStructData.mileageGPSData.GetMileageLoaded(),
+		shiftStructData.mileageGPSData.GetMileageAtBeginningOfLoading(),
+		shiftStructData.mileageGPSData.GetMileageEmpty(),
+	).Scan(shifId)
+	if err == nil {
+		log.Debugf("объект смены записан в БД id смены: %d", shifId)
+	}
+	return err
+}
+
+// метод делает запрос в БД на добавление новой сессии в таблицу
+func (s *StorageMessageHandler) makeRquestAddNewSession(sessionStructData sessionDataFromModule, objId, shifId int, sessionId *int) error {
+	err := s.dbConn.QueryRowDB(addNewSession,
+		shifId,
+		objId,
+		sessionStructData.mainData.GetDriverId(),
+		sessionStructData.mainData.GetOffset(),
+		sessionStructData.mainData.GetTimeStartSession(),
+		sessionStructData.mainData.GetTimeUpdateSession(),
+		sessionStructData.mainData.GetAvSpeed(),
+		sessionStructData.engHoursData.GetEngHoursStart(),
+		sessionStructData.engHoursData.GetEngHoursCurrent(),
+		sessionStructData.engHoursData.GetEngHoursEnd(),
+		sessionStructData.mileageData.GetMileageStart(),
+		sessionStructData.mileageData.GetMileageCurrent(),
+		sessionStructData.mileageData.GetMileageEnd(),
+		sessionStructData.mileageData.GetMileageLoaded(),
+		sessionStructData.mileageData.GetMileageAtBeginningOfLoading(),
+		sessionStructData.mileageData.GetMileageEmpty(),
+		sessionStructData.mileageGPSData.GetMileageStart(),
+		sessionStructData.mileageGPSData.GetMileageCurrent(),
+		sessionStructData.mileageGPSData.GetMileageEnd(),
+		sessionStructData.mileageGPSData.GetMileageLoaded(),
+		sessionStructData.mileageGPSData.GetMileageAtBeginningOfLoading(),
+		sessionStructData.mileageGPSData.GetMileageEmpty(),
+	).Scan(&sessionId)
+	if err == nil {
+		log.Debugf("объект cессии записан в БД id cессии: %d", sessionId)
+	}
+	return err
+}
+
+// метод делает запрос в БД на обновление смены в таблице
+func (s *StorageMessageHandler) makeRequestUpdateShift(shiftStructData shiftDataFromModule) error {
+	err := s.dbConn.ExecQuery(updateShift,
+		shiftStructData.mainData.GetShiftId(),
+		shiftStructData.mainData.GetShiftDateEnd(),
+		shiftStructData.mainData.GetUpdatedTime(),
+		shiftStructData.mainData.GetOffset(),
+		shiftStructData.mainData.GetCurrentDriverId(),
+		shiftStructData.mainData.GetStatusLoaded(),
+		shiftStructData.engHoursData.GetEngHoursStart(),
+		shiftStructData.engHoursData.GetEngHoursCurrent(),
+		shiftStructData.engHoursData.GetEngHoursEnd(),
+		shiftStructData.mileageData.GetMileageStart(),
+		shiftStructData.mileageData.GetMileageCurrent(),
+		shiftStructData.mileageData.GetMileageEnd(),
+		shiftStructData.mileageData.GetMileageLoaded(),
+		shiftStructData.mileageData.GetMileageAtBeginningOfLoading(),
+		shiftStructData.mileageData.GetMileageEmpty(),
+		shiftStructData.mileageGPSData.GetMileageStart(),
+		shiftStructData.mileageGPSData.GetMileageCurrent(),
+		shiftStructData.mileageGPSData.GetMileageEnd(),
+		shiftStructData.mileageGPSData.GetMileageLoaded(),
+		shiftStructData.mileageGPSData.GetMileageAtBeginningOfLoading(),
+		shiftStructData.mileageGPSData.GetMileageEmpty(),
+	)
+	if err == nil {
+		log.Debugf("объект смены обновлен в БД id смены: %d", shiftStructData.mainData.GetShiftId())
+	}
+	return err
+}
+
+func (s *StorageMessageHandler) makeRequestUpdateSession(sessionStructData sessionDataFromModule) error {
+	err := s.dbConn.ExecQuery(updateDriverSession,
+		sessionStructData.mainData.GetSessionId(),
+		sessionStructData.mainData.GetOffset(),
+		sessionStructData.mainData.GetTimeUpdateSession(),
+		sessionStructData.mainData.GetAvSpeed(),
+		sessionStructData.engHoursData.GetEngHoursStart(),
+		sessionStructData.engHoursData.GetEngHoursCurrent(),
+		sessionStructData.engHoursData.GetEngHoursEnd(),
+		sessionStructData.mileageData.GetMileageStart(),
+		sessionStructData.mileageData.GetMileageCurrent(),
+		sessionStructData.mileageData.GetMileageEnd(),
+		sessionStructData.mileageData.GetMileageLoaded(),
+		sessionStructData.mileageData.GetMileageAtBeginningOfLoading(),
+		sessionStructData.mileageData.GetMileageEmpty(),
+		sessionStructData.mileageGPSData.GetMileageStart(),
+		sessionStructData.mileageGPSData.GetMileageCurrent(),
+		sessionStructData.mileageGPSData.GetMileageEnd(),
+		sessionStructData.mileageGPSData.GetMileageLoaded(),
+		sessionStructData.mileageGPSData.GetMileageAtBeginningOfLoading(),
+		sessionStructData.mileageGPSData.GetMileageEmpty(),
+	)
+	if err == nil {
+		log.Debugf("объект сессии обновлен в БД id сессии: %d", sessionStructData.mainData.GetSessionId())
+	}
+	return err
 }

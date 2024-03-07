@@ -164,6 +164,7 @@ func (a *AggDataPerObject) eventHandling(ctx context.Context, eventData *eventDa
 	// обновление локальных объектов сессии и смены
 	a.updateObjects(eventData, eventOffset)
 
+	// формирование сообщения для модуля storage
 	mes := mesForStorage{
 		typeMes:         typeMes,
 		objectID:        a.objectId,
@@ -172,6 +173,7 @@ func (a *AggDataPerObject) eventHandling(ctx context.Context, eventData *eventDa
 	}
 
 	// отправка сообщения в модуль storage (события будут обрабатываться по-разному, в зависимости от сообщения typeMes)
+	// можно сделать отправку запросов через attemptSendRequest
 	responceStorage, err := a.sendingMesToStorage(ctx, mes, a.timeWaitResponseStorage)
 	if err != nil {
 		return err
@@ -194,14 +196,29 @@ func (a *AggDataPerObject) eventHandling(ctx context.Context, eventData *eventDa
 		a.shiftCurrentData.setShiftId(responceData.GetShiftId())
 		log.Debug("добавление новых записей смены и сессии успешно завершено")
 	case updateShiftAndAddNewSession:
-		// sessionData, errDecodingSession := decodingMesFromStorageToStruct[RowSessionObjData](answerFromStorage.GetDataDriverSession())
-		// if errDecodingSession != nil {
-		// 	return errDecodingSession
-		// }
-		// a.sessionCurrentData.setSessionId(sessionData.SessionId)
-		// log.Debug()
+		// TODO: если другой интерфейс для получения ответа не нужно будет использовать то этот интерфейс надо переимоновать
+		responceData, err := сonversionAnswerStorage[responceStorageToAddNewShiftAndSession](responceStorage)
+		if err != nil {
+			// ошибка конвертации
+			return err
+		}
+		if responceData.GetError() != nil {
+			// ошибка в storage
+			return err
+		}
+		a.sessionCurrentData.setSessionId(responceData.GetSessionId())
+		log.Debugf("данные смены обновлены, добавлена новая сессия с Id: %d", responceData.GetSessionId())
 	case updateShiftAndSession:
-		log.Debug()
+		responceData, err := сonversionAnswerStorage[responceStorageToAddNewShiftAndSession](responceStorage)
+		if err != nil {
+			// ошибка конвертации
+			return err
+		}
+		if responceData.GetError() != nil {
+			// ошибка в storage
+			return err
+		}
+		log.Debug("данные смены и данные сессии обновлены")
 	}
 
 	// TODO: нужно установить значение текущего offset на тот который был добавлен в БД

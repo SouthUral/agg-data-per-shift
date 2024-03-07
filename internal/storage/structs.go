@@ -235,6 +235,7 @@ type sessionDataFromModule struct {
 	mileageGPSData mileageDataInterface
 }
 
+// загрузка данных из интерфейса в структуру sessionDataFromModule
 func (s *sessionDataFromModule) loadData(data interface{}) error {
 	var err error
 	s.mainData, err = utils.TypeConversion[dataDriverSessionFromStorage](data)

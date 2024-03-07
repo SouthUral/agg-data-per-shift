@@ -105,6 +105,13 @@ func (p *PgConn) QueryRowDB(query string, args ...any) pgx.Row {
 	return row
 }
 
+// метод производит запрос, который не должен ничего возвращать
+func (p *PgConn) ExecQuery(query string, args ...any) error {
+	ctx, _ := context.WithTimeout(context.Background(), p.timeOutQueryes*time.Second)
+	_, err := p.dbpool.Exec(ctx, query, args...)
+	return err
+}
+
 // метод прекращает работу модуля PgConn (завершает все активные горутины, разрывает коннект с БД)
 func (p *PgConn) Shutdown(err error) {
 	log.Errorf("PgConn is terminated for a reason: %s", err)

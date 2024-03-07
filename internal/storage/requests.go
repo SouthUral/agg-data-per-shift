@@ -109,4 +109,51 @@ const (
 		$22
 	)
 	RETURNING id;`
+	updateShift = `
+	UPDATE reports.shifts
+	SET 
+		shift_date_end = $2,
+		updated_time = $3,
+		event_offset = $4,
+		current_driver_id = $5,
+		loaded = $6,
+		eng_hours_start = $7,
+		eng_hours_current = $8,
+		eng_hours_end = $9,
+		mileage_start = $10,
+		mileage_current = $11,
+		mileage_end = $12,
+		mileage_loaded = $13,
+		mileage_at_beginning_of_loading = $14,
+		mileage_empty = $15,
+		mileage_gps_start = $16,
+		mileage_gps_current = $17,
+		mileage_gps_end = $18,
+		mileage_gps_loaded = $19,
+		mileage_gps_at_beginning_of_loading = $20,
+		mileage_gps_empty = $21
+	WHERE id = $1;`
+	updateDriverSession = `
+	UPDATE reports.drivers_sessions
+	SET 
+		event_offset = $2,
+		time_update_session = $3,
+		av_speed = $4,
+		eng_hours_start = $5,
+		eng_hours_current = $6,
+		eng_hours_end = $7,
+		mileage_start = $8,
+		mileage_current = $9,
+		mileage_end = $10,
+		mileage_loaded = $11,
+		mileage_at_beginning_of_loading = $12,
+		mileage_empty = $13,
+		mileage_gps_start = $14,
+		mileage_gps_current = $15,
+		mileage_gps_end = $16,
+		mileage_gps_loaded = $17,
+		mileage_gps_at_beginning_of_loading = $18,
+		mileage_gps_empty = $19
+	WHERE id = $1;
+	`
 )
