@@ -337,7 +337,7 @@ func (s *StorageMessageHandler) makeRquestAddNewShift(shiftStructData shiftDataF
 		shiftStructData.mileageGPSData.GetMileageEmpty(),
 	).Scan(shifId)
 	if err == nil {
-		log.Debugf("объект смены записан в БД id смены: %d", shifId)
+		log.Debugf("объект смены записан в БД id смены: %d", *shifId)
 	}
 	return err
 }
@@ -367,9 +367,9 @@ func (s *StorageMessageHandler) makeRquestAddNewSession(sessionStructData sessio
 		sessionStructData.mileageGPSData.GetMileageLoaded(),
 		sessionStructData.mileageGPSData.GetMileageAtBeginningOfLoading(),
 		sessionStructData.mileageGPSData.GetMileageEmpty(),
-	).Scan(&sessionId)
+	).Scan(sessionId)
 	if err == nil {
-		log.Debugf("объект cессии записан в БД id cессии: %d", sessionId)
+		log.Debugf("объект cессии записан в БД id cессии: %d", *sessionId)
 	}
 	return err
 }

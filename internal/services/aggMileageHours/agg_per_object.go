@@ -75,8 +75,9 @@ func (a *AggDataPerObject) gettingEvents(ctx context.Context) {
 					log.Error(err)
 					return
 				}
+			} else {
+				log.Debugf("сообщение с offset: %d пропущено, текущий offset объекта: %d", msg.offset, a.lastOffset)
 			}
-			log.Debugf("сообщение с offset: %d пропущено, текущий offset объекта: %d", msg.offset, a.lastOffset)
 		}
 	}
 }
@@ -190,7 +191,8 @@ func (a *AggDataPerObject) eventHandling(ctx context.Context, eventData *eventDa
 			// ошибка в storage
 			return err
 		}
-
+		log.Debugf("id новой смены: %d", responceData.GetShiftId())
+		log.Debugf("id новой сессии: %d", responceData.GetSessionId())
 		a.sessionCurrentData.setSessionId(responceData.GetSessionId())
 		a.sessionCurrentData.setShiftId(responceData.GetShiftId())
 		a.shiftCurrentData.setShiftId(responceData.GetShiftId())
@@ -221,7 +223,7 @@ func (a *AggDataPerObject) eventHandling(ctx context.Context, eventData *eventDa
 		log.Debug("данные смены и данные сессии обновлены")
 	}
 
-	// TODO: нужно установить значение текущего offset на тот который был добавлен в БД
+	log.Debugf("оффсет объекта %d обновлен с %d на %d", a.objectId, a.lastOffset, eventOffset)
 	a.lastOffset = eventOffset
 
 	return err
@@ -339,7 +341,7 @@ func (a *AggDataPerObject) sendingMesToStorage(ctx context.Context, mes mesForSt
 // метод обработки типа события
 func (a *AggDataPerObject) typeEventHandlig(typeEvent string) {
 	switch typeEvent {
-	case "DB_MSG_TYPE_START_LOAD":
+	case "DB_MSG_TYPE_LOAD":
 		a.shiftCurrentData.Loaded = true
 
 	case "DB_MSG_TYPE_UNLOAD":

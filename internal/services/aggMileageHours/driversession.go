@@ -6,7 +6,7 @@ import (
 
 // функция создает объект сессии на основании данных из события.
 func initNewSession(event *eventData, eventOffset int64) *sessionDriverData {
-	newShift := &sessionDriverData{
+	newSession := &sessionDriverData{
 		// shiftId: будет заполнено после записи объекта в БД
 		// sessionId: будет записано после записи объекта в БД
 		driverId:          event.numDriver,
@@ -14,12 +14,11 @@ func initNewSession(event *eventData, eventOffset int64) *sessionDriverData {
 		timeStartSession:  event.mesTime,
 		timeUpdateSession: event.mesTime,
 		avSpeed:           event.avSpeed,
-		engHoursData:      initNewEngHours(event),
-		mileageData:       initNewMileageData(event),
-		mileageGPSData:    initNewMileageData(event),
 	}
 
-	return newShift
+	newSession.initAggDataFields(event)
+
+	return newSession
 }
 
 // функция создает новую сессию на основании данных из БД
@@ -31,16 +30,14 @@ func initNewSessionLoadingDBData(data interface{}) (*sessionDriverData, error) {
 
 // данные по сессии водителя в смене
 type sessionDriverData struct {
-	shiftId           int          // id смены, в которой находится сессия
-	sessionId         int          // id сессии, берется из БД
-	driverId          int          // id водителя
-	offset            int64        // последний записанный offset
-	timeStartSession  time.Time    // время старта сессии
-	timeUpdateSession time.Time    // время обновления записи сессии
-	avSpeed           float32      // средняя скорость водителя
-	engHoursData      *engHours    // данные по моточасам за сессию
-	mileageData       *mileageData // данные по пробегу за смену
-	mileageGPSData    *mileageData // данные пробега по GPS за сессию
+	shiftId           int       // id смены, в которой находится сессия
+	sessionId         int       // id сессии, берется из БД
+	driverId          int       // id водителя
+	offset            int64     // последний записанный offset
+	timeStartSession  time.Time // время старта сессии
+	timeUpdateSession time.Time // время обновления записи сессии
+	avSpeed           float32   // средняя скорость водителя
+	aggData
 }
 
 func (s sessionDriverData) GetShiftId() int {
@@ -63,15 +60,6 @@ func (s sessionDriverData) GetTimeUpdateSession() time.Time {
 }
 func (s sessionDriverData) GetAvSpeed() float32 {
 	return s.avSpeed
-}
-func (s sessionDriverData) GetEngHoursData() interface{} {
-	return *s.engHoursData
-}
-func (s sessionDriverData) GetMileageData() interface{} {
-	return *s.mileageData
-}
-func (s sessionDriverData) GetMileageGPSData() interface{} {
-	return *s.mileageGPSData
 }
 
 func (s *sessionDriverData) setSessionId(id int) {
@@ -97,15 +85,11 @@ func (s *sessionDriverData) loadingData(data interface{}) error {
 	s.timeUpdateSession = sData.GetTimeUpdateSession()
 	s.avSpeed = sData.GetAvSpeed()
 
-	s.mileageData, err = initNewMileageDataLoadingDBData(sData.GetMileageData())
-	if err != nil {
-		return err
-	}
-	s.mileageGPSData, err = initNewMileageDataLoadingDBData(sData.GetMileageGPSData())
-	if err != nil {
-		return err
-	}
-	s.engHoursData, err = initEngHoursLoadingDBData(sData.GetEngHoursData())
+	err = s.loadingDataFromInterface(
+		sData.GetMileageData(),
+		sData.GetMileageGPSData(),
+		sData.GetEngHoursData(),
+	)
 
 	return err
 }
@@ -124,10 +108,9 @@ func (s *sessionDriverData) createNewDriverSession(driverId int, mesTime time.Ti
 		timeStartSession: mesTime,
 		// timeUpdateSession записывается при обновлении записи
 		// avSpeed записывается при обновлении записи
-		engHoursData:   s.engHoursData.createNewEngHours(),
-		mileageData:    s.mileageData.createNewMileageData(),
-		mileageGPSData: s.mileageGPSData.createNewMileageData(),
 	}
+
+	newDriverSession.initNewAggDataFields(s.EngHoursData, s.MileageData, s.MileageGPSData)
 
 	return newDriverSession
 }
@@ -140,7 +123,5 @@ func (s *sessionDriverData) updateSession(eventData *eventData, eventOffset int6
 	s.offset = eventOffset
 	s.timeUpdateSession = eventData.mesTime
 	s.avSpeed = eventData.avSpeed
-	s.engHoursData.updateEngHours(eventData.engineHours)
-	s.mileageData.updateMileageData(eventData.mileage, objLoaded)
-	s.mileageGPSData.updateMileageData(eventData.gpsMileage, objLoaded)
+	s.updateDataFields(eventData, objLoaded)
 }

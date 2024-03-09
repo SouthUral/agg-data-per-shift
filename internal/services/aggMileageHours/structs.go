@@ -72,11 +72,11 @@ func (s *settingsDurationShifts) defineShift(dateEvent time.Time) (int, time.Tim
 	return numShift, dateShift, err
 }
 
-func initNewMileageData(eventData *eventData) *mileageData {
+func initNewMileageData(mileage int) *mileageData {
 	newMileageData := &mileageData{
-		mileageStart:                eventData.mileage,
+		mileageStart:                mileage,
 		mileageCurrent:              0,
-		mileageEnd:                  eventData.mileage,
+		mileageEnd:                  mileage,
 		mileageLoaded:               0, // значение 0 т.к. неизвестно в каком состоянии находится машина
 		mileageAtBeginningOfLoading: 0, // значение 0 т.к. неизвестно в каком состоянии находится машина
 		mileageEmpty:                0, // значение 0 т.к. неизвестно в каком состоянии находится машина

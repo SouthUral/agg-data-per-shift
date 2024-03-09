@@ -16,10 +16,9 @@ func initNewShift(event *eventData, numShift int, dateShift time.Time, eventOffs
 		Offset:          eventOffset,
 		CurrentDriverId: event.numDriver,
 		Loaded:          false, // при создании неизвестно является ли транспорт груженым
-		engHoursData:    initNewEngHours(event),
-		mileageData:     initNewMileageData(event),
-		mileageGPSData:  initNewMileageData(event),
 	}
+
+	newShift.initAggDataFields(event)
 
 	return newShift
 }
@@ -33,18 +32,16 @@ func initNewShiftLoadingDBData(data interface{}) (*ShiftObjData, error) {
 
 // данные смены по объекту техники
 type ShiftObjData struct {
-	Id              int          `json:"id"`                // id текущей смены
-	NumShift        int          `json:"num_shift"`         // номер смены (1/2....n)
-	ShiftDateStart  time.Time    `json:"shift_date_start"`  // время и дата начала смены (время первого события смены)
-	ShiftDateEnd    time.Time    `json:"shift_date_end"`    // время окончания смены (время последнего обновления)
-	ShiftDate       time.Time    `json:"shift_date"`        // текущая дата смены (смена может начинаться в другую дату)
-	UpdatedTime     time.Time    `json:"updated_time"`      // время обновления смены
-	Offset          int64        `json:"event_offset"`      // offset события, которое последнее обновило состояние смены
-	CurrentDriverId int          `json:"current_driver_id"` // id текущего водителя техники (может меняться в пределах смены)
-	Loaded          bool         `json:"loaded"`            // находится ли техника в груженом состоянии
-	engHoursData    *engHours    // данные по моточасам за смену
-	mileageData     *mileageData // данные по пробегу за смену
-	mileageGPSData  *mileageData // данные по пробегу по GPS за смену
+	Id              int       `json:"id"`                // id текущей смены
+	NumShift        int       `json:"num_shift"`         // номер смены (1/2....n)
+	ShiftDateStart  time.Time `json:"shift_date_start"`  // время и дата начала смены (время первого события смены)
+	ShiftDateEnd    time.Time `json:"shift_date_end"`    // время окончания смены (время последнего обновления)
+	ShiftDate       time.Time `json:"shift_date"`        // текущая дата смены (смена может начинаться в другую дату)
+	UpdatedTime     time.Time `json:"updated_time"`      // время обновления смены
+	Offset          int64     `json:"event_offset"`      // offset события, которое последнее обновило состояние смены
+	CurrentDriverId int       `json:"current_driver_id"` // id текущего водителя техники (может меняться в пределах смены)
+	Loaded          bool      `json:"loaded"`            // находится ли техника в груженом состоянии
+	aggData
 }
 
 func (s ShiftObjData) GetShiftId() int {
@@ -74,15 +71,6 @@ func (s ShiftObjData) GetCurrentDriverId() int {
 func (s ShiftObjData) GetStatusLoaded() bool {
 	return s.Loaded
 }
-func (s ShiftObjData) GetEngHoursData() interface{} {
-	return *s.engHoursData
-}
-func (s ShiftObjData) GetMileageData() interface{} {
-	return *s.mileageData
-}
-func (s ShiftObjData) GetMileageGPSData() interface{} {
-	return *s.mileageGPSData
-}
 
 func (s *ShiftObjData) setShiftId(id int) {
 	s.Id = id
@@ -105,15 +93,11 @@ func (s *ShiftObjData) loadingData(data interface{}) error {
 	s.CurrentDriverId = shiftData.GetCurrentDriverId()
 	s.Loaded = shiftData.GetStatusLoaded()
 
-	s.mileageData, err = initNewMileageDataLoadingDBData(shiftData.GetMileageData())
-	if err != nil {
-		return err
-	}
-	s.mileageGPSData, err = initNewMileageDataLoadingDBData(shiftData.GetMileageGPSData())
-	if err != nil {
-		return err
-	}
-	s.engHoursData, err = initEngHoursLoadingDBData(shiftData.GetEngHoursData())
+	err = s.loadingDataFromInterface(
+		shiftData.GetMileageData(),
+		shiftData.GetMileageGPSData(),
+		shiftData.GetEngHoursData(),
+	)
 
 	return err
 }
@@ -132,10 +116,9 @@ func (s *ShiftObjData) createNewShift(numShift int, dateShift, mesTime time.Time
 		NumShift:       numShift,
 		ShiftDate:      dateShift,
 		Loaded:         s.Loaded, // флаг загрузки переносится с предыдущей смены, т.к. техника может быть еще не разгружена
-		engHoursData:   s.engHoursData.createNewEngHours(),
-		mileageData:    s.mileageData.createNewMileageData(),
-		mileageGPSData: s.mileageGPSData.createNewMileageData(),
 	}
+
+	newShift.initNewAggDataFields(s.EngHoursData, s.MileageData, s.MileageGPSData)
 
 	return newShift
 }
@@ -150,7 +133,5 @@ func (s *ShiftObjData) updateShiftObjData(eventData *eventData, eventOffset int6
 	s.Offset = eventOffset
 	s.CurrentDriverId = eventData.numDriver
 	s.Loaded = objLoaded
-	s.engHoursData.updateEngHours(eventData.engineHours)
-	s.mileageData.updateMileageData(eventData.mileage, objLoaded)
-	s.mileageGPSData.updateMileageData(eventData.gpsMileage, objLoaded)
+	s.updateDataFields(eventData, objLoaded)
 }

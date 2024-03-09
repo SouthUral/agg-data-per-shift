@@ -57,7 +57,8 @@ func main() {
 			switch message.GetTypeMsg() {
 			case "GetOffset":
 				message.GetReverceCh() <- answerEvent{
-					offset: 0,
+					offset: 500000,
+					// offset: 0,
 				}
 			case "InputMSG":
 				log.Debugf("offset: %d", message.GetOffset())

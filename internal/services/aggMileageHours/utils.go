@@ -33,22 +33,13 @@ func decodingMessage(msg []byte) (*eventData, error) {
 	return eventData, err
 }
 
-// функция преобразования сообщения из storage во внутренние структуры
-func decodingMesFromStorageToStruct[T RowShiftObjData | RowSessionObjData](data []byte) (*T, error) {
-	var res T
-	target := &res
-	err := json.Unmarshal(data, target)
-	return target, err
-}
-
-// конвертирует структуры в json
-func conversionToJson[T any](data T) ([]byte, error) {
-	b, err := json.Marshal(data)
-	return b, err
-}
-
 func timeConversion(date string) (time.Time, error) {
+	log.Warningf("timeConversion data: %s", date)
 	dateSplits := strings.Split(date, ".")
+	if len(dateSplits[1]) < 3 {
+		dateSplits[1] = dateSplits[1] + "000000"
+	}
+	log.Warningf("%s", dateSplits[1])
 	dateSplits[1] = dateSplits[1][:3]
 	timeToFormat := strings.Join(dateSplits, ".")
 	resTime, err := time.Parse(timeLayOut, timeToFormat)
