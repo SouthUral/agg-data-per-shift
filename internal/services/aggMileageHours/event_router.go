@@ -34,8 +34,8 @@ func InitEventRouter(storageCh chan interface{}, timeWaitResponse int) (*EventRo
 	}
 
 	// временно сам добавляю смены
-	t1, _ := time.Parse(time.TimeOnly, "00:00:01")
-	t2, _ := time.Parse(time.TimeOnly, "11:59:59")
+	t1, _ := time.Parse(time.TimeOnly, "00:00:00")
+	t2, _ := time.Parse(time.TimeOnly, "12:00:00")
 	res.settingShift.AddShiftSetting(1, 12, t1)
 	res.settingShift.AddShiftSetting(2, 12, t2)
 
@@ -68,7 +68,11 @@ func (e *EventRouter) routing(ctx context.Context) {
 				return
 			}
 
-			e.sendingEventToAggObj(message.GetOffset(), eventData)
+			err = e.sendingEventToAggObj(message.GetOffset(), eventData)
+			if err != nil {
+				log.Error(err)
+				e.Shudown(err)
+			}
 		}
 	}
 
@@ -81,9 +85,15 @@ func (e *EventRouter) Shudown(err error) {
 	e.cancel()
 }
 
-func (e *EventRouter) sendingEventToAggObj(offsetEvent int64, event *eventData) {
+func (e *EventRouter) sendingEventToAggObj(offsetEvent int64, event *eventData) error {
+	var err error
 	obj := e.getAggObj(event.objectID)
+	if !obj.getIsActive() {
+		err = aggObjIsNotActiveError{event.objectID}
+		return err
+	}
 	obj.eventReception(offsetEvent, event)
+	return err
 }
 
 func (e *EventRouter) getAggObj(objId int) *AggDataPerObject {

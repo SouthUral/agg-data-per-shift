@@ -66,10 +66,9 @@ type engHoursDataInterface interface {
 
 // интерфейс получения данных о пробеге
 type mileageDataInterface interface {
-	GetMileageStart() int                // пробег на начало смены/сессии
-	GetMileageCurrent() int              // пробег на последнее обновление записи
-	GetMileageEnd() int                  // пробег на конец смены/сессии
-	GetMileageLoaded() int               // пробег груженым
-	GetMileageAtBeginningOfLoading() int // пробег на начало последней погрузки (может быть 0 если на момент чтения данных из БД машина была не грудеженая)
-	GetMileageEmpty() int                // пробег порожним
+	GetMileageStart() int   // пробег на начало смены/сессии
+	GetMileageCurrent() int // пробег на последнее обновление записи
+	GetMileageEnd() int     // пробег на конец смены/сессии
+	GetMileageLoaded() int  // пробег груженым
+	GetMileageEmpty() int   // пробег порожним
 }

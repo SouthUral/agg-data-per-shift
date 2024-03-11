@@ -40,6 +40,23 @@ func (s *settingsDurationShifts) AddShiftSetting(numShift, shiftDuration int, st
 	s.mx.Unlock()
 }
 
+// определяет границы смены на переданную дату
+func (s *settingsDurationShifts) definingShiftsForTheDay(shiftSettings settingShift, pTime time.Time) (time.Time, time.Time) {
+	t := time.Date(pTime.Year(),
+		pTime.Month(),
+		pTime.Day(),
+		shiftSettings.startTimeShift.Hour(),
+		shiftSettings.startTimeShift.Minute(),
+		shiftSettings.startTimeShift.Second(),
+		shiftSettings.startTimeShift.Nanosecond(),
+		pTime.Location(),
+	)
+	startShift := t.Add(time.Duration(s.offsetTimeShift) * time.Hour)
+	endShift := startShift.Add(time.Duration(shiftSettings.shiftDuration) * time.Hour)
+	startShift = startShift.Add(1 * time.Nanosecond)
+	return startShift, endShift
+}
+
 // метод для определения номера и даты смены
 func (s *settingsDurationShifts) defineShift(dateEvent time.Time) (int, time.Time, error) {
 	// определять смену нужно по текущей дате в событии
@@ -47,39 +64,34 @@ func (s *settingsDurationShifts) defineShift(dateEvent time.Time) (int, time.Tim
 	var dateShift time.Time
 	var err error
 
+	defineDataEvent := dateEvent
+
 	s.mx.RLock()
-	for numShift, shiftSettings := range s.shifts {
-		t := time.Date(dateEvent.Year(),
-			dateEvent.Month(),
-			dateEvent.Day(),
-			shiftSettings.startTimeShift.Hour(),
-			shiftSettings.startTimeShift.Minute(),
-			shiftSettings.startTimeShift.Second(),
-			shiftSettings.startTimeShift.Nanosecond(),
-			dateEvent.Local().Location(),
-		)
-		startShift := t.Add(-time.Duration(s.offsetTimeShift) * time.Hour)
-		endShift := startShift.Add(time.Duration(shiftSettings.shiftDuration) * time.Hour)
-		if dateEvent.After(startShift) && dateEvent.Before(endShift) {
-			// дата смены равна дате окончанию смены  т.к. смена может начинаться вечером в прошлый день
-			return numShift, endShift, err
+	for i := 0; i < 2; i++ {
+		for numShift, shiftSettings := range s.shifts {
+			startShift, endShift := s.definingShiftsForTheDay(shiftSettings, defineDataEvent)
+			compare := dateEvent.After(startShift) && dateEvent.Before(endShift)
+			if compare {
+				return numShift, endShift, err
+			}
 		}
+		defineDataEvent = defineDataEvent.Add(24 * time.Hour)
 	}
+
 	defer s.mx.RUnlock()
 
-	err = defineShiftError{}
+	err = defineShiftError{dateEvent}
 
 	return numShift, dateShift, err
 }
 
 func initNewMileageData(mileage int) *mileageData {
 	newMileageData := &mileageData{
-		mileageStart:                mileage,
-		mileageCurrent:              0,
-		mileageEnd:                  mileage,
-		mileageLoaded:               0, // значение 0 т.к. неизвестно в каком состоянии находится машина
-		mileageAtBeginningOfLoading: 0, // значение 0 т.к. неизвестно в каком состоянии находится машина
-		mileageEmpty:                0, // значение 0 т.к. неизвестно в каком состоянии находится машина
+		mileageStart:   mileage,
+		mileageCurrent: 0,
+		mileageEnd:     mileage,
+		mileageLoaded:  0, // значение 0 т.к. неизвестно в каком состоянии находится машина
+		mileageEmpty:   0, // значение 0 т.к. неизвестно в каком состоянии находится машина
 
 	}
 	return newMileageData
@@ -94,12 +106,11 @@ func initNewMileageDataLoadingDBData(data interface{}) (*mileageData, error) {
 
 // данные по пробегу за смену/сессию
 type mileageData struct {
-	mileageStart                int // пробег на начало (смены/сессии)
-	mileageCurrent              int // текущий пробег
-	mileageEnd                  int // проебег на конец смены
-	mileageLoaded               int // пробег в груженом состоянии
-	mileageAtBeginningOfLoading int // пробег на начало последней погрузки (поле обнуляется после разгрузки)
-	mileageEmpty                int // пробег в порожнем состоянии
+	mileageStart   int // пробег на начало (смены/сессии)
+	mileageCurrent int // текущий пробег
+	mileageEnd     int // проебег на конец смены
+	mileageLoaded  int // пробег в груженом состоянии
+	mileageEmpty   int // пробег в порожнем состоянии
 }
 
 func (m mileageData) GetMileageStart() int {
@@ -113,9 +124,6 @@ func (m mileageData) GetMileageEnd() int {
 }
 func (m mileageData) GetMileageLoaded() int {
 	return m.mileageLoaded
-}
-func (m mileageData) GetMileageAtBeginningOfLoading() int {
-	return m.mileageAtBeginningOfLoading
 }
 func (m mileageData) GetMileageEmpty() int {
 	return m.mileageEmpty
@@ -131,7 +139,6 @@ func (m *mileageData) loadingData(data interface{}) error {
 	m.mileageCurrent = mData.GetMileageCurrent()
 	m.mileageEnd = mData.GetMileageEnd()
 	m.mileageLoaded = mData.GetMileageLoaded()
-	m.mileageAtBeginningOfLoading = mData.GetMileageAtBeginningOfLoading()
 	m.mileageEmpty = mData.GetMileageEmpty()
 	return err
 }
@@ -139,33 +146,23 @@ func (m *mileageData) loadingData(data interface{}) error {
 // метод для создания новой структуры mileageData на основании старой
 func (m *mileageData) createNewMileageData() *mileageData {
 	newMileageData := &mileageData{
-		mileageStart:                m.mileageEnd,
-		mileageEnd:                  m.mileageEnd,
-		mileageAtBeginningOfLoading: m.mileageEnd, // значение обнулится, если окажется что объект не груженый
+		mileageStart: m.mileageEnd,
+		mileageEnd:   m.mileageEnd,
 	}
 	return newMileageData
 }
 
 // метод для обновления данных по моточасам
 func (m *mileageData) updateMileageData(mileage int, objLoaded bool) {
-	m.mileageEnd = mileage
-	m.mileageCurrent = m.mileageEnd - m.mileageStart
-	if objLoaded {
-		if m.mileageAtBeginningOfLoading != 0 {
-			m.mileageLoaded = mileage - m.mileageAtBeginningOfLoading
-		} else {
-			// если mileageAtBeginningOfLoading не был установлен, то это первое событие в груженом состоянии,
-			// нужно установить значение mileageAtBeginningOfLoading
-			m.mileageAtBeginningOfLoading = mileage
-		}
-	} else {
-		if m.mileageAtBeginningOfLoading != 0 {
-			// если при обновлении флаг загрузки будет false, но поле mileageAtBeginningOfLoading не будет 0, то
-			// это означает что текущее событие было событием разгрузки и пройденное расстояние до разгрузки входит в груженный пробег
-			m.mileageLoaded = mileage - m.mileageAtBeginningOfLoading
-			m.mileageAtBeginningOfLoading = 0
-		}
+	if m.mileageStart == 0 {
+		m.mileageStart = mileage
 	}
+
+	m.mileageCurrent = mileage - m.mileageStart
+	if objLoaded {
+		m.mileageLoaded += mileage - m.mileageEnd
+	}
+	m.mileageEnd = mileage
 	m.mileageEmpty = m.mileageCurrent - m.mileageLoaded
 }
 
@@ -277,4 +274,32 @@ type eventData struct {
 	fioDriver   string    // ФИО водителя
 	numDriver   int       // номер водителя
 	avSpeed     float32   // средняя скрорость водителя на технике
+}
+
+// флаг инициализируется сразу в активном состоянии
+func initActiveFlag() *activeFlag {
+	return &activeFlag{
+		mx:       sync.RWMutex{},
+		isActive: true,
+	}
+}
+
+// структура флаг, для определения активности обработчика
+type activeFlag struct {
+	mx       sync.RWMutex
+	isActive bool
+}
+
+func (a *activeFlag) getIsActive() bool {
+	var res bool
+	a.mx.RLock()
+	res = a.isActive
+	a.mx.RUnlock()
+	return res
+}
+
+func (a *activeFlag) setIsActive(active bool) {
+	a.mx.Lock()
+	a.isActive = active
+	a.mx.Unlock()
 }

@@ -327,13 +327,11 @@ func (s *StorageMessageHandler) makeRquestAddNewShift(shiftStructData shiftDataF
 		shiftStructData.mileageData.GetMileageCurrent(),
 		shiftStructData.mileageData.GetMileageEnd(),
 		shiftStructData.mileageData.GetMileageLoaded(),
-		shiftStructData.mileageData.GetMileageAtBeginningOfLoading(),
 		shiftStructData.mileageData.GetMileageEmpty(),
 		shiftStructData.mileageGPSData.GetMileageStart(),
 		shiftStructData.mileageGPSData.GetMileageCurrent(),
 		shiftStructData.mileageGPSData.GetMileageEnd(),
 		shiftStructData.mileageGPSData.GetMileageLoaded(),
-		shiftStructData.mileageGPSData.GetMileageAtBeginningOfLoading(),
 		shiftStructData.mileageGPSData.GetMileageEmpty(),
 	).Scan(shifId)
 	if err == nil {
@@ -359,13 +357,11 @@ func (s *StorageMessageHandler) makeRquestAddNewSession(sessionStructData sessio
 		sessionStructData.mileageData.GetMileageCurrent(),
 		sessionStructData.mileageData.GetMileageEnd(),
 		sessionStructData.mileageData.GetMileageLoaded(),
-		sessionStructData.mileageData.GetMileageAtBeginningOfLoading(),
 		sessionStructData.mileageData.GetMileageEmpty(),
 		sessionStructData.mileageGPSData.GetMileageStart(),
 		sessionStructData.mileageGPSData.GetMileageCurrent(),
 		sessionStructData.mileageGPSData.GetMileageEnd(),
 		sessionStructData.mileageGPSData.GetMileageLoaded(),
-		sessionStructData.mileageGPSData.GetMileageAtBeginningOfLoading(),
 		sessionStructData.mileageGPSData.GetMileageEmpty(),
 	).Scan(sessionId)
 	if err == nil {
@@ -390,13 +386,11 @@ func (s *StorageMessageHandler) makeRequestUpdateShift(shiftStructData shiftData
 		shiftStructData.mileageData.GetMileageCurrent(),
 		shiftStructData.mileageData.GetMileageEnd(),
 		shiftStructData.mileageData.GetMileageLoaded(),
-		shiftStructData.mileageData.GetMileageAtBeginningOfLoading(),
 		shiftStructData.mileageData.GetMileageEmpty(),
 		shiftStructData.mileageGPSData.GetMileageStart(),
 		shiftStructData.mileageGPSData.GetMileageCurrent(),
 		shiftStructData.mileageGPSData.GetMileageEnd(),
 		shiftStructData.mileageGPSData.GetMileageLoaded(),
-		shiftStructData.mileageGPSData.GetMileageAtBeginningOfLoading(),
 		shiftStructData.mileageGPSData.GetMileageEmpty(),
 	)
 	if err == nil {
@@ -418,13 +412,11 @@ func (s *StorageMessageHandler) makeRequestUpdateSession(sessionStructData sessi
 		sessionStructData.mileageData.GetMileageCurrent(),
 		sessionStructData.mileageData.GetMileageEnd(),
 		sessionStructData.mileageData.GetMileageLoaded(),
-		sessionStructData.mileageData.GetMileageAtBeginningOfLoading(),
 		sessionStructData.mileageData.GetMileageEmpty(),
 		sessionStructData.mileageGPSData.GetMileageStart(),
 		sessionStructData.mileageGPSData.GetMileageCurrent(),
 		sessionStructData.mileageGPSData.GetMileageEnd(),
 		sessionStructData.mileageGPSData.GetMileageLoaded(),
-		sessionStructData.mileageGPSData.GetMileageAtBeginningOfLoading(),
 		sessionStructData.mileageGPSData.GetMileageEmpty(),
 	)
 	if err == nil {

@@ -24,13 +24,8 @@ type AggDataPerObject struct {
 	settingsShift           *settingsDurationShifts // настройки смены, меняются централизованно
 	timeWaitResponseStorage int                     // время ожидания ответа от БД
 	numAttemptRequest       int                     // количество попыток отправок запроса в модуль storage
+	isActive                *activeFlag             // флаг активности обработчика
 }
-
-// TODO: параметры смены будут в отдельном модуле, который будет отправлять информацию в случае изменения, горутины работают со своими локальными настройками
-// либо можно оставить общий объект настроек смены но в роутере, в самом роутере обновлять настройки при получении от модуля
-
-// TODO: при инициализации нужно полностью восстановить информацию о смене
-// TODO: горутина сама восстанавливает информацию о смене, после создания она отправляет запрос в БД на восстановление состояния
 
 func initAggDataPerObject(objectId, numAttemptRequest, timeWaitResponse int, settingsShift *settingsDurationShifts, storageCh chan interface{}) (*AggDataPerObject, context.Context) {
 	ctx, cancel := context.WithCancel(context.Background())
@@ -43,6 +38,7 @@ func initAggDataPerObject(objectId, numAttemptRequest, timeWaitResponse int, set
 		storageCh:               storageCh,
 		timeWaitResponseStorage: timeWaitResponse,
 		numAttemptRequest:       numAttemptRequest,
+		isActive:                initActiveFlag(),
 	}
 
 	// запуск горутины получения событий
@@ -55,6 +51,7 @@ func initAggDataPerObject(objectId, numAttemptRequest, timeWaitResponse int, set
 // процесс получения событий из маршрутизатора
 func (a *AggDataPerObject) gettingEvents(ctx context.Context) {
 	defer log.Warningf("gettingEvents for objectId: %d has finished", a.objectId)
+	defer a.isActive.setIsActive(false)
 
 	// восстановление состояния
 	err := a.restoringState(ctx)
@@ -136,7 +133,6 @@ func (a *AggDataPerObject) eventHandling(ctx context.Context, eventData *eventDa
 	var err error
 	typeMes := updateShiftAndSession
 
-	log.Debugf("%+v, mess_time: %s", eventData, eventData.mesTime)
 	// получение номера и даты смены по времени сообщения, для проверки текущей смены объекта
 	numShift, dateShift, err := a.settingsShift.defineShift(eventData.mesTime)
 	if err != nil {
@@ -355,4 +351,9 @@ func (a *AggDataPerObject) eventReception(offset int64, event *eventData) {
 		offset:    offset,
 		eventData: event,
 	}
+}
+
+// метод для получения информации об активности обработчика
+func (a *AggDataPerObject) getIsActive() bool {
+	return a.isActive.getIsActive()
 }

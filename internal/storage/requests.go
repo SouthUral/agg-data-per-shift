@@ -25,64 +25,11 @@ const (
 		mileage_current, 
 		mileage_end, 
 		mileage_loaded, 
-		mileage_at_beginning_of_loading, 
 		mileage_empty, 
 		mileage_gps_start, 
 		mileage_gps_current, 
 		mileage_gps_end, 
 		mileage_gps_loaded, 
-		mileage_gps_at_beginning_of_loading, 
-		mileage_gps_empty
-	) VALUES (
-		$1,
-		$2,
-		$3, 
-		$4, 
-		$5, 
-		$6,
-		$7, 
-		$8, 
-		$9, 
-		$10,
-		$11, 
-		$12, 
-		$13,
-		$14,
-		$15,
-		$16,
-		$17,
-		$18, 
-		$19,
-		$20, 
-		$21,
-		$22,
-		$23,
-		$24
-	)
-	RETURNING id;`
-	addNewSession = `
-	INSERT INTO reports.drivers_sessions (
-		shift_id,
-		object_id,
-		driver_id,
-		event_offset,
-		time_start_session,
-		time_update_session,
-		av_speed,
-		eng_hours_start, 
-		eng_hours_current, 
-		eng_hours_end, 
-		mileage_start, 
-		mileage_current, 
-		mileage_end, 
-		mileage_loaded, 
-		mileage_at_beginning_of_loading, 
-		mileage_empty, 
-		mileage_gps_start, 
-		mileage_gps_current, 
-		mileage_gps_end, 
-		mileage_gps_loaded, 
-		mileage_gps_at_beginning_of_loading, 
 		mileage_gps_empty
 	) VALUES (
 		$1,
@@ -109,6 +56,51 @@ const (
 		$22
 	)
 	RETURNING id;`
+	addNewSession = `
+	INSERT INTO reports.drivers_sessions (
+		shift_id,
+		object_id,
+		driver_id,
+		event_offset,
+		time_start_session,
+		time_update_session,
+		av_speed,
+		eng_hours_start, 
+		eng_hours_current, 
+		eng_hours_end, 
+		mileage_start, 
+		mileage_current, 
+		mileage_end, 
+		mileage_loaded, 
+		mileage_empty, 
+		mileage_gps_start, 
+		mileage_gps_current, 
+		mileage_gps_end, 
+		mileage_gps_loaded, 
+		mileage_gps_empty
+	) VALUES (
+		$1,
+		$2,
+		$3, 
+		$4, 
+		$5, 
+		$6,
+		$7, 
+		$8, 
+		$9, 
+		$10,
+		$11, 
+		$12, 
+		$13,
+		$14,
+		$15,
+		$16,
+		$17,
+		$18, 
+		$19,
+		$20
+	)
+	RETURNING id;`
 	updateShift = `
 	UPDATE reports.shifts
 	SET 
@@ -124,14 +116,12 @@ const (
 		mileage_current = $11,
 		mileage_end = $12,
 		mileage_loaded = $13,
-		mileage_at_beginning_of_loading = $14,
-		mileage_empty = $15,
-		mileage_gps_start = $16,
-		mileage_gps_current = $17,
-		mileage_gps_end = $18,
-		mileage_gps_loaded = $19,
-		mileage_gps_at_beginning_of_loading = $20,
-		mileage_gps_empty = $21
+		mileage_empty = $14,
+		mileage_gps_start = $15,
+		mileage_gps_current = $16,
+		mileage_gps_end = $17,
+		mileage_gps_loaded = $18,
+		mileage_gps_empty = $19
 	WHERE id = $1;`
 	updateDriverSession = `
 	UPDATE reports.drivers_sessions
@@ -146,14 +136,12 @@ const (
 		mileage_current = $9,
 		mileage_end = $10,
 		mileage_loaded = $11,
-		mileage_at_beginning_of_loading = $12,
-		mileage_empty = $13,
-		mileage_gps_start = $14,
-		mileage_gps_current = $15,
-		mileage_gps_end = $16,
-		mileage_gps_loaded = $17,
-		mileage_gps_at_beginning_of_loading = $18,
-		mileage_gps_empty = $19
+		mileage_empty = $12,
+		mileage_gps_start = $13,
+		mileage_gps_current = $14,
+		mileage_gps_end = $15,
+		mileage_gps_loaded = $16,
+		mileage_gps_empty = $17
 	WHERE id = $1;
 	`
 )

@@ -1,6 +1,9 @@
 package aggmileagehours
 
-import "fmt"
+import (
+	"fmt"
+	"time"
+)
 
 // ошибка десериализации json
 type unmarshalingJsonError struct {
@@ -77,10 +80,11 @@ func (e restoringStateError) Error() string {
 
 // ошибка определения смены (нет смены)
 type defineShiftError struct {
+	eventTime time.Time
 }
 
 func (e defineShiftError) Error() string {
-	return "define shift error, there is no shift"
+	return fmt.Sprintf("define shift error, there is no shift : %s", e.eventTime)
 }
 
 // ошибка при создании новой смены и сессии
@@ -105,4 +109,13 @@ type attemptRequestError struct {
 
 func (e attemptRequestError) Error() string {
 	return "the number of attempts to send requests has ended"
+}
+
+// ошибка активности обработчика
+type aggObjIsNotActiveError struct {
+	numObj int
+}
+
+func (e aggObjIsNotActiveError) Error() string {
+	return fmt.Sprintf("aggObj with obj id: %d is not active", e.numObj)
 }

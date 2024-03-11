@@ -24,12 +24,11 @@ func (e EngHoursObjData) GetEngHoursEnd() float32 {
 }
 
 type MileageObjData struct {
-	MileageStart                int `db:"mileage_start" json:"mileage_start"`                                     // пробег на начало (смены/сессии)
-	MileageCurrent              int `db:"mileage_current" json:"mileage_current"`                                 // текущий пробег
-	MileageEnd                  int `db:"mileage_end" json:"mileage_end"`                                         // проебег на конец смены
-	MileageLoaded               int `db:"mileage_loaded" json:"mileage_loaded"`                                   // пробег в груженом состоянии
-	MileageAtBeginningOfLoading int `db:"mileage_at_beginning_of_loading" json:"mileage_at_beginning_of_loading"` // пробег на начало последней погрузки (поле обнуляется после разгрузки)
-	MileageEmpty                int `db:"mileage_empty" json:"mileage_empty"`                                     // пробег в порожнем состоянии
+	MileageStart   int `db:"mileage_start" json:"mileage_start"`     // пробег на начало (смены/сессии)
+	MileageCurrent int `db:"mileage_current" json:"mileage_current"` // текущий пробег
+	MileageEnd     int `db:"mileage_end" json:"mileage_end"`         // проебег на конец смены
+	MileageLoaded  int `db:"mileage_loaded" json:"mileage_loaded"`   // пробег в груженом состоянии
+	MileageEmpty   int `db:"mileage_empty" json:"mileage_empty"`     // пробег в порожнем состоянии
 }
 
 func (m MileageObjData) GetMileageStart() int {
@@ -44,20 +43,16 @@ func (m MileageObjData) GetMileageEnd() int {
 func (m MileageObjData) GetMileageLoaded() int {
 	return m.MileageLoaded
 }
-func (m MileageObjData) GetMileageAtBeginningOfLoading() int {
-	return m.MileageAtBeginningOfLoading
-}
 func (m MileageObjData) GetMileageEmpty() int {
 	return m.MileageEmpty
 }
 
 type MileageObjGPSData struct {
-	MileageGPSStart                int `db:"mileage_gps_start" json:"mileage_gps_start"`                                     // пробег на начало (смены/сессии)
-	MileageGPSCurrent              int `db:"mileage_gps_current" json:"mileage_gps_current"`                                 // текущий пробег
-	MileageGPSEnd                  int `db:"mileage_gps_end" json:"mileage_gps_end"`                                         // проебег на конец смены
-	MileageGPSLoaded               int `db:"mileage_gps_loaded" json:"mileage_gps_loaded"`                                   // пробег в груженом состоянии
-	MileageGPSAtBeginningOfLoading int `db:"mileage_gps_at_beginning_of_loading" json:"mileage_gps_at_beginning_of_loading"` // пробег на начало последней погрузки (поле обнуляется после разгрузки)
-	MileageGPSEmpty                int `db:"mileage_gps_empty" json:"mileage_gps_empty"`
+	MileageGPSStart   int `db:"mileage_gps_start" json:"mileage_gps_start"`     // пробег на начало (смены/сессии)
+	MileageGPSCurrent int `db:"mileage_gps_current" json:"mileage_gps_current"` // текущий пробег
+	MileageGPSEnd     int `db:"mileage_gps_end" json:"mileage_gps_end"`         // проебег на конец смены
+	MileageGPSLoaded  int `db:"mileage_gps_loaded" json:"mileage_gps_loaded"`   // пробег в груженом состоянии
+	MileageGPSEmpty   int `db:"mileage_gps_empty" json:"mileage_gps_empty"`
 }
 
 func (m MileageObjGPSData) GetMileageStart() int {
@@ -71,9 +66,6 @@ func (m MileageObjGPSData) GetMileageEnd() int {
 }
 func (m MileageObjGPSData) GetMileageLoaded() int {
 	return m.MileageGPSLoaded
-}
-func (m MileageObjGPSData) GetMileageAtBeginningOfLoading() int {
-	return m.MileageGPSAtBeginningOfLoading
 }
 func (m MileageObjGPSData) GetMileageEmpty() int {
 	return m.MileageGPSEmpty

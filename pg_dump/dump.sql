@@ -71,13 +71,11 @@ CREATE TABLE reports.drivers_sessions (
     mileage_current integer,
     mileage_end integer,
     mileage_loaded integer,
-    mileage_at_beginning_of_loading integer,
     mileage_empty integer,
     mileage_gps_start integer,
     mileage_gps_current integer,
     mileage_gps_end integer,
     mileage_gps_loaded integer,
-    mileage_gps_at_beginning_of_loading integer,
     mileage_gps_empty integer
 );
 
@@ -128,13 +126,11 @@ CREATE TABLE reports.shifts (
     mileage_current integer,
     mileage_end integer,
     mileage_loaded integer,
-    mileage_at_beginning_of_loading integer,
     mileage_empty integer,
     mileage_gps_start integer,
     mileage_gps_current integer,
     mileage_gps_end integer,
     mileage_gps_loaded integer,
-    mileage_gps_at_beginning_of_loading integer,
     mileage_gps_empty integer
 );
 
