@@ -152,15 +152,17 @@ func (m *mileageData) updateMileageData(mileage int, objLoaded bool) {
 	m.mileageCurrent = m.mileageEnd - m.mileageStart
 	if objLoaded {
 		if m.mileageAtBeginningOfLoading != 0 {
-			m.mileageLoaded += mileage - m.mileageAtBeginningOfLoading
+			m.mileageLoaded = mileage - m.mileageAtBeginningOfLoading
 		} else {
+			// если mileageAtBeginningOfLoading не был установлен, то это первое событие в груженом состоянии,
+			// нужно установить значение mileageAtBeginningOfLoading
 			m.mileageAtBeginningOfLoading = mileage
 		}
 	} else {
 		if m.mileageAtBeginningOfLoading != 0 {
 			// если при обновлении флаг загрузки будет false, но поле mileageAtBeginningOfLoading не будет 0, то
 			// это означает что текущее событие было событием разгрузки и пройденное расстояние до разгрузки входит в груженный пробег
-			m.mileageLoaded += mileage - m.mileageAtBeginningOfLoading
+			m.mileageLoaded = mileage - m.mileageAtBeginningOfLoading
 			m.mileageAtBeginningOfLoading = 0
 		}
 	}
