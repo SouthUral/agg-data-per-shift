@@ -99,18 +99,18 @@ func (s *sessionDriverData) checkDriverSession(idDriver int) bool {
 	return s.driverId == idDriver
 }
 
-func (s *sessionDriverData) createNewDriverSession(driverId int, mesTime time.Time) *sessionDriverData {
+func (s *sessionDriverData) createNewDriverSession(eventData *eventData) *sessionDriverData {
 	newDriverSession := &sessionDriverData{
 		// shiftId записывается уже после добавления новой записи в БД??
 		// sessionId возвращается из БД после создания новой записи
 		// offset записывается при обновлении записи
-		driverId:         driverId,
-		timeStartSession: mesTime,
+		driverId:         eventData.numDriver,
+		timeStartSession: eventData.mesTime,
 		// timeUpdateSession записывается при обновлении записи
 		// avSpeed записывается при обновлении записи
 	}
 
-	newDriverSession.initNewAggDataFields(s.EngHoursData, s.MileageData, s.MileageGPSData)
+	newDriverSession.initNewAggDataFields(s.EngHoursData, s.MileageData, s.MileageGPSData, eventData.mileage, eventData.gpsMileage)
 
 	return newDriverSession
 }

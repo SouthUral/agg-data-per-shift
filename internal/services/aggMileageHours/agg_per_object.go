@@ -229,9 +229,9 @@ func (a *AggDataPerObject) eventHandling(ctx context.Context, eventData *eventDa
 func (a *AggDataPerObject) createNewObjects(eventData *eventData, numShift int, dateShift time.Time) string {
 	typeMes := addNewShiftAndSession
 	// создается новый объект смены на основании данных старой смены
-	a.shiftCurrentData = a.shiftCurrentData.createNewShift(numShift, dateShift, eventData.mesTime)
+	a.shiftCurrentData = a.shiftCurrentData.createNewShift(numShift, dateShift, eventData)
 	// создается новый объект сессии водителя на основании старой сессии
-	a.sessionCurrentData = a.sessionCurrentData.createNewDriverSession(eventData.numDriver, eventData.mesTime)
+	a.sessionCurrentData = a.sessionCurrentData.createNewDriverSession(eventData)
 	return typeMes
 }
 
@@ -239,7 +239,7 @@ func (a *AggDataPerObject) createNewObjects(eventData *eventData, numShift int, 
 func (a *AggDataPerObject) createSession(eventData *eventData) string {
 	// тип сообщения которое будет сформировано для отправки в модуль storage
 	typeMes := updateShiftAndAddNewSession
-	a.sessionCurrentData = a.sessionCurrentData.createNewDriverSession(eventData.numDriver, eventData.mesTime)
+	a.sessionCurrentData = a.sessionCurrentData.createNewDriverSession(eventData)
 	// установка id текущей смены для новой сессии
 	a.sessionCurrentData.setShiftId(a.shiftCurrentData.Id)
 	return typeMes

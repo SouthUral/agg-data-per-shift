@@ -108,17 +108,17 @@ func (s *ShiftObjData) checkDateNumCurrentShift(numShift int, dateShift time.Tim
 }
 
 // метод создает новый объект смены на основании данных в старой смене
-func (s *ShiftObjData) createNewShift(numShift int, dateShift, mesTime time.Time) *ShiftObjData {
+func (s *ShiftObjData) createNewShift(numShift int, dateShift time.Time, eventData *eventData) *ShiftObjData {
 	newShift := &ShiftObjData{
 		// id смены не заполняется, т.к. его нужно получить из БД
 		// updatedTime заполняется во время обновления данных
-		ShiftDateStart: mesTime,
+		ShiftDateStart: eventData.mesTime,
 		NumShift:       numShift,
 		ShiftDate:      dateShift,
 		Loaded:         s.Loaded, // флаг загрузки переносится с предыдущей смены, т.к. техника может быть еще не разгружена
 	}
 
-	newShift.initNewAggDataFields(s.EngHoursData, s.MileageData, s.MileageGPSData)
+	newShift.initNewAggDataFields(s.EngHoursData, s.MileageData, s.MileageGPSData, eventData.mileage, eventData.gpsMileage)
 
 	return newShift
 }

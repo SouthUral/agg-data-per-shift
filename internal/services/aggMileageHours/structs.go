@@ -144,16 +144,23 @@ func (m *mileageData) loadingData(data interface{}) error {
 }
 
 // метод для создания новой структуры mileageData на основании старой
-func (m *mileageData) createNewMileageData() *mileageData {
+func (m *mileageData) createNewMileageData(mileage int) *mileageData {
+	mileageNewData := m.mileageEnd
+	if mileageNewData == 0 {
+		mileageNewData = mileage
+	}
 	newMileageData := &mileageData{
-		mileageStart: m.mileageEnd,
-		mileageEnd:   m.mileageEnd,
+		mileageStart: mileageNewData,
+		mileageEnd:   mileageNewData,
 	}
 	return newMileageData
 }
 
 // метод для обновления данных по моточасам
 func (m *mileageData) updateMileageData(mileage int, objLoaded bool) {
+	if mileage == 0 {
+		return
+	}
 	if m.mileageStart == 0 {
 		m.mileageStart = mileage
 	}

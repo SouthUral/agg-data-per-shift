@@ -13,10 +13,10 @@ func (a *aggData) initAggDataFields(event *eventData) {
 }
 
 // загрузка данных из старой структуры
-func (a *aggData) initNewAggDataFields(oldEngData *engHours, oldMileageData, oldMileageGPSData *mileageData) {
+func (a *aggData) initNewAggDataFields(oldEngData *engHours, oldMileageData, oldMileageGPSData *mileageData, mileage, mileageGPS int) {
 	a.EngHoursData = oldEngData.createNewEngHours()
-	a.MileageData = oldMileageData.createNewMileageData()
-	a.MileageGPSData = oldMileageGPSData.createNewMileageData()
+	a.MileageData = oldMileageData.createNewMileageData(mileage)
+	a.MileageGPSData = oldMileageGPSData.createNewMileageData(mileageGPS)
 }
 
 // загрузка данных из интерфейсов
