@@ -1,6 +1,35 @@
 package storage
 
 const (
+	getOffset = `
+	WITH latest_sessions AS (
+		SELECT DISTINCT ON (ds.object_id)
+			ds.shift_id,
+			ds.object_id,
+			ds.event_offset,
+			ds.time_update_session
+		FROM reports.drivers_sessions ds 
+		ORDER BY ds.object_id, ds.time_update_session DESC
+	),
+	latest_shifts AS (
+		SELECT DISTINCT ON (s.object_id)
+			s.id,
+			s.object_id,
+			s.event_offset,
+			s.updated_time,
+			ds.time_update_session,
+			ds.event_offset as session_offset
+		FROM reports.shifts s
+		JOIN latest_sessions ds ON s.id = ds.shift_id
+		WHERE s.updated_time > (SELECT MAX(updated_time) - INTERVAL '1 hour' FROM reports.shifts)
+		ORDER BY s.object_id, s.updated_time DESC
+	)
+	SELECT 
+		LEAST(MIN(ls.session_offset), MIN(ls.event_offset)) AS min_value
+	FROM latest_shifts ls
+	WHERE ls.time_update_session > (SELECT MAX(time_update_session) - INTERVAL '1 hour' FROM reports.drivers_sessions)
+	LIMIT 1;
+	`
 	// запросы в БД для сообщений от модуля aggMileageHours
 	// запросы на получение последней смены по objectId
 	getLastObjShift = "SELECT * FROM reports.shifts WHERE object_id = $1 ORDER BY id DESC LIMIT 1"
