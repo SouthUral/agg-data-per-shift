@@ -13,13 +13,18 @@ import (
 
 // функция запускает сервис
 func StartService() {
-	envRabbit := "amqp://test_user:rmpassword@localhost:5672/asd"
-	pgUrl := "postgres://kovalenko:kovalenko@localhost:5435/report_bd"
-	nameConsumer := "test_consumer"
-	stream := "messages_stream"
+	envs, err := getEnvs()
+	if err != nil {
+		log.Error(err)
+		return
+	}
+	// envRabbit := "amqp://test_user:rmpassword@localhost:5672/asd"
+	// pgUrl := "postgres://kovalenko:kovalenko@localhost:5435/report_bd"
+	// nameConsumer := "test_consumer"
+	// stream := "messages_stream"
 
-	rb := amqp.InitRabbit(envRabbit, stream, nameConsumer, 30)
-	st, ctxSt := storage.InitStorageMessageHandler(pgUrl)
+	rb := amqp.InitRabbit(envs.rbEnvs, 30)
+	st, ctxSt := storage.InitStorageMessageHandler(envs.pgEnvs)
 	ctxRb := rb.StartRb()
 
 	ag, ctxAg := aggMileage.InitEventRouter(st.GetStorageCh(), 10)

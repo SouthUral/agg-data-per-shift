@@ -20,11 +20,22 @@ type PgConn struct {
 	cancel         func()
 }
 
-func initPgConn(url string, timeOutQueryes int) *PgConn {
+func getUrl(data map[string]string) string {
+	return fmt.Sprintf("postgres://%s:%s@%s:%s/%s",
+		data["user"],
+		data["password"],
+		data["host"],
+		data["port"],
+		data["db_name"],
+	)
+}
+
+func initPgConn(pgDataVars map[string]string, timeOutQueryes int) *PgConn {
+
 	ctx, cancel := context.WithCancel(context.Background())
 
 	p := &PgConn{
-		url:            url,
+		url:            getUrl(pgDataVars),
 		cancel:         cancel,
 		timeOutQueryes: time.Duration(timeOutQueryes),
 	}

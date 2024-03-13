@@ -27,12 +27,12 @@ func (s *StorageMessageHandler) GetStorageCh() chan interface{} {
 	return s.incomingCh
 }
 
-func InitStorageMessageHandler(url string) (*StorageMessageHandler, context.Context) {
+func InitStorageMessageHandler(pgDataVars map[string]string) (*StorageMessageHandler, context.Context) {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	s := &StorageMessageHandler{
 		cancel:     cancel,
-		dbConn:     initPgConn(url, 10),
+		dbConn:     initPgConn(pgDataVars, 10),
 		incomingCh: make(chan interface{}),
 	}
 	//

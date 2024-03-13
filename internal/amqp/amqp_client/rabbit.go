@@ -22,11 +22,21 @@ type Rabbit struct {
 	cancel       func()
 }
 
-func InitRabbit(url, nameQueue, nameConsumer string, timeWaitBD int) *Rabbit {
+func getUrl(data map[string]string) string {
+	return fmt.Sprintf("postgres://%s:%s@%s:%s/%s",
+		data["user"],
+		data["password"],
+		data["host"],
+		data["port"],
+		data["v_host"],
+	)
+}
+
+func InitRabbit(rbDataVars map[string]string, timeWaitBD int) *Rabbit {
 	res := &Rabbit{
-		url:          url,
-		nameQueue:    nameQueue,
-		nameConsumer: nameConsumer,
+		url:          getUrl(rbDataVars),
+		nameQueue:    rbDataVars["name_queue"],
+		nameConsumer: rbDataVars["name_consumer"],
 		timeWaitBD:   timeWaitBD,
 		outgoingCh:   make(chan interface{}),
 	}
