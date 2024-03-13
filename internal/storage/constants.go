@@ -2,7 +2,9 @@ package storage
 
 const (
 	// отправители сообщений
-	aggMileageHours = "aggMileageHours"
+	aggMileageHours  = "aggMileageHours"
+	amqp             = "amqp"
+	getOffsetForAmqp = "GetOffset"
 
 	// типы сообщений от модуля aggMileageHours
 

@@ -334,7 +334,8 @@ func (r *Rabbit) defineOffset(ctx context.Context) (amqp.Table, error) {
 		return args, err
 	}
 
-	if lastOffsetDB > int(lastOffsetRabbit) {
+	log.Debugf("последний offset в RabbitMQ %d, последний оффсет из БД %d", lastOffsetRabbit, lastOffsetDB)
+	if lastOffsetDB-1 > int(lastOffsetRabbit) {
 		// если offset из БД больше, значит очередь в Rabbit была сброшена и нужно начать читать сообщения с начала очереди
 		args = amqp.Table{"x-stream-offset": "first"}
 		return args, nil

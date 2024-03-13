@@ -60,7 +60,7 @@ func (e *EventRouter) routing(ctx context.Context) {
 				e.Shudown(err)
 				return
 			}
-
+			log.Debugf("получен Offset: %d", message.GetOffset())
 			eventData, err := decodingMessage(message.GetMsg())
 			if err != nil {
 				log.Error(err)

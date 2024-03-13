@@ -1,7 +1,7 @@
 package storage
 
 const (
-	getOffset = `
+	getStreamOffset = `
 	WITH latest_sessions AS (
 		SELECT DISTINCT ON (ds.object_id)
 			ds.shift_id,
@@ -25,7 +25,7 @@ const (
 		ORDER BY s.object_id, s.updated_time DESC
 	)
 	SELECT 
-		LEAST(MIN(ls.session_offset), MIN(ls.event_offset)) AS min_value
+		coalesce(LEAST(MIN(ls.session_offset), MIN(ls.event_offset)), 0) AS min_value
 	FROM latest_shifts ls
 	WHERE ls.time_update_session > (SELECT MAX(time_update_session) - INTERVAL '1 hour' FROM reports.drivers_sessions)
 	LIMIT 1;

@@ -13,6 +13,7 @@ type StorageMessageHandler struct {
 	dbConn     *PgConn
 	incomingCh chan interface{}
 	cancel     func()
+	amqpHandler
 }
 
 // метод прекращает работу модуля psql (завершает все активные горутины, разрывает коннект с БД)
@@ -34,6 +35,8 @@ func InitStorageMessageHandler(url string) (*StorageMessageHandler, context.Cont
 		dbConn:     initPgConn(url, 10),
 		incomingCh: make(chan interface{}),
 	}
+	//
+	s.amqpHandler.dbConn = s.dbConn
 
 	go s.listenAndServe(ctx)
 
@@ -64,6 +67,8 @@ func (s *StorageMessageHandler) handleRequests(ctx context.Context, message trun
 	switch message.GetSender() {
 	case aggMileageHours:
 		go s.handlerMesAggMileageHours(ctx, message)
+	case amqp:
+		go s.handlerMsgFromAmqp(message)
 	default:
 		log.Errorf("unknown sender: %s", message.GetSender())
 	}
