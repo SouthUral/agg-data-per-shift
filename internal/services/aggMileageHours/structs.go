@@ -229,6 +229,9 @@ func (e *engHours) createNewEngHours() *engHours {
 
 // метод для обновления данных по моточасам
 func (e *engHours) updateEngHours(engHours float32) {
+	if engHours <= e.engHoursEnd {
+		return
+	}
 	e.engHoursEnd = engHours
 	e.engHoursCurrent = e.engHoursEnd - e.engHoursStart
 }

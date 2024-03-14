@@ -37,7 +37,7 @@ func timeConversion(date string) (time.Time, error) {
 	log.Warningf("timeConversion data: %s", date)
 	dateSplits := strings.Split(date, ".")
 	if len(dateSplits) == 1 {
-		dateSplits[1] = "000"
+		dateSplits = append(dateSplits, "000")
 	}
 	if len(dateSplits[1]) < 3 {
 		dateSplits[1] = dateSplits[1] + "000000"
