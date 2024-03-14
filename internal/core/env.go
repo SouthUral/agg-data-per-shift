@@ -10,12 +10,13 @@ import (
 var (
 	// переменные окружения для подключения к постгрес
 	pgEnvs = map[string]string{
-		"host":        "ASD_POSTGRES_HOST",
-		"port":        "ASD_POSTGRES_PORT",
-		"user":        "SERVICE_PG_ILOGIC_USERNAME",
-		"password":    "SERVICE_PG_ILOGIC_PASSWORD",
-		"db_name":     "ASD_POSTGRES_DBNAME",
-		"numPullConn": "SERVICE_PG_NUM_PULL",
+		"host":           "ASD_POSTGRES_HOST",
+		"port":           "ASD_POSTGRES_PORT",
+		"user":           "SERVICE_PG_ILOGIC_USERNAME",
+		"password":       "SERVICE_PG_ILOGIC_PASSWORD",
+		"db_name":        "ASD_POSTGRES_DBNAME",
+		"pool_max_conns": "SERVICE_PG_MAX_PULL",
+		"pool_min_conns": "SERVICE_PG_MIN_PULL",
 	}
 
 	// переменные окружения для подключения к rabbitMQ
