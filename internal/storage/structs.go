@@ -171,19 +171,14 @@ func (r RowSessionObjData) GetMileageGPSData() interface{} {
 	return r.MileageObjGPSData
 }
 
-type responseShiftDB struct {
-	data RowShiftObjData
-	err  error
-}
-
-type responseSessionDB struct {
-	data RowSessionObjData
+type responceDataFromDB[D RowShiftObjData | RowSessionObjData] struct {
+	data D
 	err  error
 }
 
 type responceShiftSession struct {
-	responseShift   responseShiftDB
-	responseSession responseSessionDB
+	responseShift   responceDataFromDB[RowShiftObjData]
+	responseSession responceDataFromDB[RowSessionObjData]
 }
 
 // данные смены полученные от модуля

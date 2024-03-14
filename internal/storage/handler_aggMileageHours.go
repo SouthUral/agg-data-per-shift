@@ -95,8 +95,8 @@ func (a *aggMileageAndHoursHandler) handlerRestoreShiftDataPerObj(ctx context.Co
 	var result responceShiftSession
 	numResponse := 2 // количество ответов, которые нужно получить
 
-	chShift := makeRequestAndProcessShift(a.dbConn, getLastObjShift, objId)
-	chSession := makeRequestAndProcessSession(a.dbConn, getLastObjSession, objId)
+	chShift := makeRequestAndProcess[RowShiftObjData](a.dbConn, getLastObjShift, objId)
+	chSession := makeRequestAndProcess[RowSessionObjData](a.dbConn, getLastObjSession, objId)
 
 	for {
 		select {
@@ -319,47 +319,24 @@ func (a *aggMileageAndHoursHandler) makeRequestUpdateSession(sessionStructData s
 
 // функция отправляет запрос в БД, получает ответ, конвертирует его в переданный тип, и из типа конвертирует его в json.
 // Функция обрабатывает ответ в одну строку.
-func makeRequestAndProcessSession(dbConn *PgConn, request string, objectId int) chan responseSessionDB {
-	responseCh := make(chan responseSessionDB)
+func makeRequestAndProcess[T RowSessionObjData | RowShiftObjData](dbConn *PgConn, request string, objectId int) chan responceDataFromDB[T] {
+	responseCh := make(chan responceDataFromDB[T])
 	go func() {
 		response, err := dbConn.QueryDB(request, objectId)
 		if err != nil {
 			log.Error(err)
-			responseCh <- responseSessionDB{err: err}
+			responseCh <- responceDataFromDB[T]{err: err}
 			return
 		}
 
-		sessionData, err := converQuery[RowSessionObjData](response)
+		sessionData, err := converQuery[T](response)
 		if err != nil {
 			log.Error(err)
-			responseCh <- responseSessionDB{err: err}
+			responseCh <- responceDataFromDB[T]{err: err}
 			return
 		}
 
-		responseCh <- responseSessionDB{data: sessionData, err: err}
-		defer response.Close()
-	}()
-	return responseCh
-}
-
-func makeRequestAndProcessShift(dbConn *PgConn, request string, objectId int) chan responseShiftDB {
-	responseCh := make(chan responseShiftDB)
-	go func() {
-		response, err := dbConn.QueryDB(request, objectId)
-		if err != nil {
-			log.Error(err)
-			responseCh <- responseShiftDB{err: err}
-			return
-		}
-
-		shiftData, err := converQuery[RowShiftObjData](response)
-		if err != nil {
-			log.Error(err)
-			responseCh <- responseShiftDB{err: err}
-			return
-		}
-
-		responseCh <- responseShiftDB{data: shiftData, err: err}
+		responseCh <- responceDataFromDB[T]{data: sessionData, err: err}
 		defer response.Close()
 	}()
 	return responseCh
