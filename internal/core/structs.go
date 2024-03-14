@@ -7,13 +7,6 @@ type msgEvent interface {
 	GetOffset() int64
 }
 
-// TODO: нужно переделать все под универсальную структуру
-type trunsportMes interface {
-	GetSender() string                  // имя модуля отправителя сообщения
-	GetMesage() interface{}             // сообщение от модуля
-	GetChForResponse() chan interface{} // метод для отправки ответа
-}
-
 // транспортная структура (универсальный интерфейс)
 type transportStruct struct {
 	sender         string           // модуль отправитель сообщения
