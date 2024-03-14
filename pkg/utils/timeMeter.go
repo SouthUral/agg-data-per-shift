@@ -2,6 +2,7 @@ package utils
 
 import (
 	"context"
+	"sync"
 	"time"
 
 	log "github.com/sirupsen/logrus"
@@ -9,9 +10,10 @@ import (
 
 // структура для измерения времени процессов
 type ProcessingTimeMeter struct {
-	incomingCh    chan trunsportToProcessingTime
+	incomingCh    chan TrunsportToProcessingTime
 	cancel        func()
 	storageResult map[string]*dataForTimeAnalitics
+	mx            *sync.RWMutex
 }
 
 func (p *ProcessingTimeMeter) GetAnaliticsForAllProcess() {
@@ -23,9 +25,10 @@ func (p *ProcessingTimeMeter) GetAnaliticsForAllProcess() {
 func InitProcessingTimeMeter() *ProcessingTimeMeter {
 	ctx, cancel := context.WithCancel(context.Background())
 	p := &ProcessingTimeMeter{
-		incomingCh:    make(chan trunsportToProcessingTime, 20),
+		incomingCh:    make(chan TrunsportToProcessingTime, 100),
 		cancel:        cancel,
 		storageResult: make(map[string]*dataForTimeAnalitics, 20),
+		mx:            &sync.RWMutex{},
 	}
 	go p.process(ctx)
 	return p
@@ -36,7 +39,17 @@ func (p *ProcessingTimeMeter) Shudown() {
 	p.cancel()
 }
 
-func (p *ProcessingTimeMeter) SendMessToTimeMeter(msg trunsportToProcessingTime) {
+// возвращает счетчик выбранного измерителя
+func (p *ProcessingTimeMeter) GetCounterOnKey(key string) (int, bool) {
+	p.mx.RLock()
+	data, ok := p.storageResult[key]
+	if !ok {
+		return 0, ok
+	}
+	return data.GetCounter(), ok
+}
+
+func (p *ProcessingTimeMeter) SendMessToTimeMeter(msg TrunsportToProcessingTime) {
 	p.incomingCh <- msg
 }
 
@@ -54,23 +67,23 @@ func (p *ProcessingTimeMeter) process(ctx context.Context) {
 
 }
 
-func (p *ProcessingTimeMeter) timeProcessing(msg trunsportToProcessingTime) {
-	analiticsData, ok := p.storageResult[msg.nameProcess]
+func (p *ProcessingTimeMeter) timeProcessing(msg TrunsportToProcessingTime) {
+	analiticsData, ok := p.storageResult[msg.NameProcess]
 	if !ok {
-		p.storageResult[msg.nameProcess] = initDataForTimeAnalitics(msg.GetTimeInt())
+		p.storageResult[msg.NameProcess] = initDataForTimeAnalitics(msg.GetTimeInt())
 		return
 	}
 
 	analiticsData.AddValue(msg.GetTimeInt())
 }
 
-type trunsportToProcessingTime struct {
-	nameProcess string
-	timeProcess time.Duration
+type TrunsportToProcessingTime struct {
+	NameProcess string
+	TimeProcess time.Duration
 }
 
-func (t *trunsportToProcessingTime) GetTimeInt() int64 {
-	return t.timeProcess.Microseconds()
+func (t *TrunsportToProcessingTime) GetTimeInt() int64 {
+	return t.TimeProcess.Microseconds()
 }
 
 type dataForTimeAnalitics struct {
@@ -79,6 +92,7 @@ type dataForTimeAnalitics struct {
 	sumTime     int64
 	averageTime int64
 	counterData int
+	mx          *sync.RWMutex
 }
 
 func initDataForTimeAnalitics(t int64) *dataForTimeAnalitics {
@@ -88,7 +102,15 @@ func initDataForTimeAnalitics(t int64) *dataForTimeAnalitics {
 		averageTime: t,
 		sumTime:     t,
 		counterData: 1,
+		mx:          &sync.RWMutex{},
 	}
+}
+
+func (d *dataForTimeAnalitics) GetCounter() int {
+	d.mx.RLock()
+	res := d.counterData
+	d.mx.RUnlock()
+	return res
 }
 
 func (d *dataForTimeAnalitics) SetMinTime(t int64) {
