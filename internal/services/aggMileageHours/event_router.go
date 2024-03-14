@@ -13,15 +13,16 @@ import (
 // структура в которой происходит распределение событий по горутинам объектов техники
 // ---
 type EventRouter struct {
-	incomingEventCh  chan interface{}          // канал для получения событий
-	storageCh        chan interface{}          // канал для связи с модулем psql
-	aggObjs          map[int]*AggDataPerObject // map с объектами агрегации данных (по id техники)
-	settingShift     *settingsDurationShifts   // настройки смены
+	incomingEventCh  chan interface{}           // канал для получения событий
+	storageCh        chan interface{}           // канал для связи с модулем psql
+	aggObjs          map[int]*AggDataPerObject  // map с объектами агрегации данных (по id техники)
+	settingShift     *settingsDurationShifts    // настройки смены
+	timeMeter        *utils.ProcessingTimeMeter // измеритель времени процессов
 	cancel           func()
 	timeWaitResponse int // для горутин обработчиков, время ожидания ответа от БД
 }
 
-func InitEventRouter(storageCh chan interface{}, timeWaitResponse int) (*EventRouter, context.Context) {
+func InitEventRouter(storageCh chan interface{}, timeWaitResponse int, timeMeter *utils.ProcessingTimeMeter) (*EventRouter, context.Context) {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	res := &EventRouter{
@@ -31,6 +32,7 @@ func InitEventRouter(storageCh chan interface{}, timeWaitResponse int) (*EventRo
 		storageCh:        storageCh,
 		timeWaitResponse: timeWaitResponse,
 		settingShift:     initSettingsDurationShifts(-4),
+		timeMeter:        timeMeter,
 	}
 
 	// временно сам добавляю смены
@@ -105,7 +107,7 @@ func (e *EventRouter) getAggObj(objId int) *AggDataPerObject {
 }
 
 func (e *EventRouter) createNewAggObj(objId int) *AggDataPerObject {
-	aggObj, _ := initAggDataPerObject(objId, 100, e.timeWaitResponse, e.settingShift, e.storageCh)
+	aggObj, _ := initAggDataPerObject(objId, 100, e.timeWaitResponse, e.settingShift, e.storageCh, e.timeMeter)
 	e.aggObjs[objId] = aggObj
 	return aggObj
 }

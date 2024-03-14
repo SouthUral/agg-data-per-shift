@@ -13,21 +13,22 @@ import (
 
 // структура в которой происходят процессы агрегации данных на объект техники
 type AggDataPerObject struct {
-	objectId                int                     // objectId техники
-	shiftCurrentData        *ShiftObjData           // данные за текущую смену
-	sessionCurrentData      *sessionDriverData      // данные текущей сессии водителя
-	lastOffset              int64                   // последний offset загруженный в БД
-	incomingCh              chan eventForAgg        // канал для получения событий
-	storageCh               chan interface{}        // канал для связи с модулем работающем с БД
-	cancel                  func()                  // функция для завршения конекста
-	stateRestored           bool                    // флаг сигнализирующий и восстановленном состоянии, если флаг false занчит состояние еще не восстановлено
-	settingsShift           *settingsDurationShifts // настройки смены, меняются централизованно
-	timeWaitResponseStorage int                     // время ожидания ответа от БД
-	numAttemptRequest       int                     // количество попыток отправок запроса в модуль storage
-	isActive                *activeFlag             // флаг активности обработчика
+	objectId                int                        // objectId техники
+	shiftCurrentData        *ShiftObjData              // данные за текущую смену
+	sessionCurrentData      *sessionDriverData         // данные текущей сессии водителя
+	lastOffset              int64                      // последний offset загруженный в БД
+	incomingCh              chan eventForAgg           // канал для получения событий
+	storageCh               chan interface{}           // канал для связи с модулем работающем с БД
+	cancel                  func()                     // функция для завршения конекста
+	stateRestored           bool                       // флаг сигнализирующий и восстановленном состоянии, если флаг false занчит состояние еще не восстановлено
+	settingsShift           *settingsDurationShifts    // настройки смены, меняются централизованно
+	timeWaitResponseStorage int                        // время ожидания ответа от БД
+	numAttemptRequest       int                        // количество попыток отправок запроса в модуль storage
+	isActive                *activeFlag                // флаг активности обработчика
+	timeMeter               *utils.ProcessingTimeMeter // измеритель времени процессов
 }
 
-func initAggDataPerObject(objectId, numAttemptRequest, timeWaitResponse int, settingsShift *settingsDurationShifts, storageCh chan interface{}) (*AggDataPerObject, context.Context) {
+func initAggDataPerObject(objectId, numAttemptRequest, timeWaitResponse int, settingsShift *settingsDurationShifts, storageCh chan interface{}, timeMeter *utils.ProcessingTimeMeter) (*AggDataPerObject, context.Context) {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	res := &AggDataPerObject{
@@ -39,6 +40,7 @@ func initAggDataPerObject(objectId, numAttemptRequest, timeWaitResponse int, set
 		timeWaitResponseStorage: timeWaitResponse,
 		numAttemptRequest:       numAttemptRequest,
 		isActive:                initActiveFlag(),
+		timeMeter:               timeMeter,
 	}
 
 	// запуск горутины получения событий
@@ -67,7 +69,14 @@ func (a *AggDataPerObject) gettingEvents(ctx context.Context) {
 		case msg := <-a.incomingCh:
 			// если offset событий меньше текущего offset тогда событие игнорируется
 			if msg.offset > a.lastOffset {
+				start := time.Now()
 				err := a.eventHandling(ctx, msg.eventData, msg.offset)
+				duration := time.Since(start)
+				// отправка сообщения в измеритель
+				a.timeMeter.SendMessToTimeMeter(utils.TrunsportToProcessingTime{
+					NameProcess: "eventHandling",
+					TimeProcess: duration,
+				})
 				if err != nil {
 					log.Error(err)
 					return
