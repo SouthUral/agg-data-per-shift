@@ -28,17 +28,17 @@ func (s *StorageMessageHandler) GetStorageCh() chan interface{} {
 	return s.incomingCh
 }
 
-func InitStorageMessageHandler(pgDataVars map[string]string) (*StorageMessageHandler, context.Context) {
+func InitStorageMessageHandler(dbConn *PgConn) (*StorageMessageHandler, context.Context) {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	s := &StorageMessageHandler{
 		cancel:     cancel,
-		dbConn:     initPgConn(pgDataVars, 10),
+		dbConn:     dbConn,
 		incomingCh: make(chan interface{}),
 	}
 
-	s.amqpHandler.dbConn = s.dbConn
-	s.aggMileageAndHoursHandler.dbConn = s.dbConn
+	s.amqpHandler.dbConn = dbConn
+	s.aggMileageAndHoursHandler.dbConn = dbConn
 
 	go s.listenAndServe(ctx)
 

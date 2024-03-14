@@ -21,16 +21,18 @@ type PgConn struct {
 }
 
 func getUrl(data map[string]string) string {
-	return fmt.Sprintf("postgres://%s:%s@%s:%s/%s",
+	return fmt.Sprintf("postgres://%s:%s@%s:%s/%s?pool_max_conns=%s&pool_min_conns=%s",
 		data["user"],
 		data["password"],
 		data["host"],
 		data["port"],
 		data["db_name"],
+		data["pool_max_conns"],
+		data["pool_min_conns"],
 	)
 }
 
-func initPgConn(pgDataVars map[string]string, timeOutQueryes int) *PgConn {
+func InitPgConn(pgDataVars map[string]string, timeOutQueryes, checkTimeWait int) (*PgConn, context.Context) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -41,14 +43,17 @@ func initPgConn(pgDataVars map[string]string, timeOutQueryes int) *PgConn {
 	}
 
 	// запуск процесса мониторинга и подключения к БД
-	go p.processConn(ctx, 5)
+	go p.processConn(ctx, checkTimeWait)
 
-	return p
+	return p, ctx
 }
 
 // процесс проверяет подключение к postgres в заданный промежуток
 // если подключения нет то производится попытка подключения
 func (p *PgConn) processConn(ctx context.Context, waitingTime int) {
+	var maxAcquiredConns int32
+	var minAcquiredConns int32
+
 	defer log.Warning("processConn is closed")
 	for {
 		select {
@@ -62,7 +67,19 @@ func (p *PgConn) processConn(ctx context.Context, waitingTime int) {
 					log.Error(err)
 				}
 			}
-			time.Sleep(time.Duration(waitingTime) * time.Second)
+
+			status := p.dbpool.Stat()
+			acCons := status.AcquiredConns()
+			if maxAcquiredConns < acCons {
+				maxAcquiredConns = acCons
+			}
+
+			if minAcquiredConns > acCons {
+				minAcquiredConns = acCons
+			}
+
+			log.Debugf("PgConnStatus! maxAcquiredConns: %d, minAcquiredConns: %d", maxAcquiredConns, minAcquiredConns)
+			time.Sleep(time.Duration(waitingTime) * time.Millisecond)
 		}
 	}
 }
@@ -125,6 +142,8 @@ func (p *PgConn) ExecQuery(query string, args ...any) error {
 
 // метод прекращает работу модуля PgConn (завершает все активные горутины, разрывает коннект с БД)
 func (p *PgConn) Shutdown(err error) {
+	status := p.dbpool.Stat()
+	log.Infof("PgConn; all cons: %d ; AcquiredConns: %d; IdleConns: %d", status.TotalConns(), status.AcquiredConns(), status.IdleConns())
 	log.Errorf("PgConn is terminated for a reason: %s", err)
 	p.cancel()
 	p.closePoolConn()
