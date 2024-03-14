@@ -23,7 +23,7 @@ type Rabbit struct {
 }
 
 func getUrl(data map[string]string) string {
-	return fmt.Sprintf("postgres://%s:%s@%s:%s/%s",
+	return fmt.Sprintf("amqp://%s:%s@%s:%s/%s",
 		data["user"],
 		data["password"],
 		data["host"],
