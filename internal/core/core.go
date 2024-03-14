@@ -18,10 +18,6 @@ func StartService() {
 		log.Error(err)
 		return
 	}
-	// envRabbit := "amqp://test_user:rmpassword@localhost:5672/asd"
-	// pgUrl := "postgres://kovalenko:kovalenko@localhost:5435/report_bd"
-	// nameConsumer := "test_consumer"
-	// stream := "messages_stream"
 
 	rb := amqp.InitRabbit(envs.rbEnvs, 30)
 	st, ctxSt := storage.InitStorageMessageHandler(envs.pgEnvs)
