@@ -69,7 +69,7 @@ func (e *EnvLoader) Load(keys map[string]string) map[string]string {
 
 	for key, envKey := range keys {
 		value, exists := os.LookupEnv(envKey)
-		if exists {
+		if exists && value != "" {
 			res[key] = value
 		} else {
 			e.unloadedVariables = append(e.unloadedVariables, envKey)
