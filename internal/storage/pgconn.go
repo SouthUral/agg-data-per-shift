@@ -2,6 +2,7 @@ package storage
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -10,6 +11,10 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	log "github.com/sirupsen/logrus"
+)
+
+var (
+	errAttemptConnError = errors.New("the number of attempts to connect to the database has ended")
 )
 
 // структура объекта работы с БД
@@ -32,7 +37,12 @@ func getUrl(data map[string]string) string {
 	)
 }
 
-func InitPgConn(pgDataVars map[string]string, timeOutQueryes, checkTimeWait int) (*PgConn, context.Context) {
+// Функция инициализирует PgConn и запускает процесс подключения к БД и мониторинга состояния подключения.
+//   - pgDataVars: параметры загруженные из переменных окружения;
+//   - timeOutQueryes: время ожидания ответа на запросы в БД (в миллисекундах);
+//   - checkTimeWait: время ожидания между проверками подключения к БД (в миллисекундах);
+//   - numAttemptConn: количество попыток реконнекта в случае дисконнекта БД;
+func InitPgConn(pgDataVars map[string]string, timeOutQueryes, checkTimeWait, numAttemptConn int) (*PgConn, context.Context) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -43,14 +53,16 @@ func InitPgConn(pgDataVars map[string]string, timeOutQueryes, checkTimeWait int)
 	}
 
 	// запуск процесса мониторинга и подключения к БД
-	go p.processConn(ctx, checkTimeWait)
+	go p.processConn(ctx, checkTimeWait, numAttemptConn)
 
 	return p, ctx
 }
 
 // процесс проверяет подключение к postgres в заданный промежуток
 // если подключения нет то производится попытка подключения
-func (p *PgConn) processConn(ctx context.Context, waitingTime int) {
+func (p *PgConn) processConn(ctx context.Context, waitingTime, numAttemptConn int) {
+	var counterAttemptConn = numAttemptConn
+
 	defer log.Warning("processConn is closed")
 	for {
 		select {
@@ -59,11 +71,18 @@ func (p *PgConn) processConn(ctx context.Context, waitingTime int) {
 		default:
 			if err := p.checkPool(); err != nil {
 				log.Error(err)
-				err = p.connPool()
-				if err != nil {
+				if err = p.connPool(); err != nil {
 					log.Error(err)
 				}
+				if counterAttemptConn == 0 {
+					err = utils.Wrapper(errAttemptConnError, err)
+					p.Shutdown(err)
+					return
+				}
+				counterAttemptConn--
+				log.Infof("there are still attempts to connect: %d", counterAttemptConn)
 			} else {
+				counterAttemptConn = numAttemptConn
 				p.defineNumsConn()
 			}
 
@@ -86,9 +105,13 @@ func (p *PgConn) connPool() error {
 
 func (p *PgConn) checkPool() error {
 	if p.dbpool == nil {
-		return fmt.Errorf("коннект еще не создан")
+		return fmt.Errorf("the pool of connections has not been created yet")
 	}
-	err := p.dbpool.Ping(context.TODO())
+	ctx, _ := context.WithTimeout(context.Background(), p.timeOutQueryes*time.Second)
+	err := p.dbpool.Ping(ctx)
+	if err != nil {
+		log.Errorf("checkConn err: %s", err)
+	}
 	return err
 }
 

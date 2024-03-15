@@ -29,7 +29,7 @@ func StartService() {
 
 	// инициализация подключения к базам
 	rb := amqp.InitRabbit(envs.rbEnvs, 30)
-	db, dbCtx := storage.InitPgConn(envs.pgEnvs, 5, 500)
+	db, dbCtx := storage.InitPgConn(envs.pgEnvs, 1000, 1000, 20)
 
 	// инициализация логики
 	st, ctxSt := storage.InitStorageMessageHandler(db)
