@@ -51,9 +51,6 @@ func InitPgConn(pgDataVars map[string]string, timeOutQueryes, checkTimeWait int)
 // процесс проверяет подключение к postgres в заданный промежуток
 // если подключения нет то производится попытка подключения
 func (p *PgConn) processConn(ctx context.Context, waitingTime int) {
-	var maxAcquiredConns int32
-	var minAcquiredConns int32
-
 	defer log.Warning("processConn is closed")
 	for {
 		select {
@@ -62,30 +59,22 @@ func (p *PgConn) processConn(ctx context.Context, waitingTime int) {
 		default:
 			if err := p.checkPool(); err != nil {
 				log.Error(err)
-				err = p.connPool(context.TODO())
+				err = p.connPool()
 				if err != nil {
 					log.Error(err)
 				}
+			} else {
+				p.defineNumsConn()
 			}
 
-			status := p.dbpool.Stat()
-			acCons := status.AcquiredConns()
-			if maxAcquiredConns < acCons {
-				maxAcquiredConns = acCons
-			}
-
-			if minAcquiredConns > acCons {
-				minAcquiredConns = acCons
-			}
-
-			log.Debugf("PgConnStatus! maxAcquiredConns: %d, minAcquiredConns: %d", maxAcquiredConns, minAcquiredConns)
 			time.Sleep(time.Duration(waitingTime) * time.Millisecond)
 		}
 	}
 }
 
 // метод для создания пула коннектов
-func (p *PgConn) connPool(ctx context.Context) error {
+func (p *PgConn) connPool() error {
+	ctx, _ := context.WithTimeout(context.Background(), p.timeOutQueryes*time.Second)
 	dbpool, err := pgxpool.New(ctx, p.url)
 	if err != nil {
 		return err
@@ -140,10 +129,26 @@ func (p *PgConn) ExecQuery(query string, args ...any) error {
 	return err
 }
 
+// выводит количество используемых и неиспользуемых коннектов
+func (p *PgConn) defineNumsConn() {
+	var maxAcquiredConns int32
+	var minAcquiredConns int32
+
+	status := p.dbpool.Stat()
+	acCons := status.AcquiredConns()
+	if maxAcquiredConns < acCons {
+		maxAcquiredConns = acCons
+	}
+
+	if minAcquiredConns > acCons {
+		minAcquiredConns = acCons
+	}
+
+	log.Debugf("PgConnStatus! maxAcquiredConns: %d, minAcquiredConns: %d", maxAcquiredConns, minAcquiredConns)
+}
+
 // метод прекращает работу модуля PgConn (завершает все активные горутины, разрывает коннект с БД)
 func (p *PgConn) Shutdown(err error) {
-	status := p.dbpool.Stat()
-	log.Infof("PgConn; all cons: %d ; AcquiredConns: %d; IdleConns: %d", status.TotalConns(), status.AcquiredConns(), status.IdleConns())
 	log.Errorf("PgConn is terminated for a reason: %s", err)
 	p.cancel()
 	p.closePoolConn()
