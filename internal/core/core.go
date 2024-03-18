@@ -16,6 +16,8 @@ import (
 func StartService() {
 	// var targetCount int = 5000
 
+	streamOffset := "first"
+
 	envs, err := getEnvs()
 	if err != nil {
 		log.Error(err)
@@ -25,7 +27,7 @@ func StartService() {
 	timeMeter := utils.InitProcessingTimeMeter()
 	defer timeMeter.GetAnaliticsForAllProcess()
 	defer timeMeter.Shudown()
-	defer time.Sleep(5 * time.Second)
+	defer time.Sleep(3 * time.Second)
 
 	// инициализация подключения к базам
 	rb := amqp.InitRabbit(envs.rbEnvs, 30)
@@ -65,10 +67,17 @@ func StartService() {
 			}
 			switch message.GetTypeMsg() {
 			case "GetOffset":
-				st.GetStorageCh() <- transportStruct{
-					sender:         "amqp",
-					mesage:         message.GetTypeMsg(),
-					reverseChannel: message.GetReverceCh(),
+				switch streamOffset {
+				case "first":
+					message.GetReverceCh() <- answerEvent{
+						offset: 100000000,
+					}
+				default:
+					st.GetStorageCh() <- transportStruct{
+						sender:         "amqp",
+						mesage:         message.GetTypeMsg(),
+						reverseChannel: message.GetReverceCh(),
+					}
 				}
 			case "InputMSG":
 				// counter, _ := timeMeter.GetCounterOnKey("eventHandling")
@@ -81,7 +90,14 @@ func StartService() {
 				// }
 				log.Debugf("offset: %d", message.GetOffset())
 				message.GetReverceCh() <- answerEvent{}
-				ag.EventReception(message)
+				err := ag.EventReception(message)
+				if err != nil {
+					log.Error(err)
+					rb.RabbitShutdown(err)
+					ag.Shudown(err)
+					st.Shutdown(err)
+					return
+				}
 
 			default:
 				rb.RabbitShutdown(fmt.Errorf("неизвестный тип событий"))

@@ -76,3 +76,17 @@ func comparingDates(dateFirst, dateSecond time.Time) bool {
 	t2 := time.Date(dateSecond.Year(), dateSecond.Month(), dateSecond.Day(), 0, 0, 0, 0, time.Local)
 	return t1.Equal(t2)
 }
+
+// функция получает критические ошибки и возвращает первую найденную
+func checkErrorsInMes(data incomingMessageFromStorage) error {
+	var errCritical error
+
+	if errCritical = data.GetCriticalErr(); errCritical != nil {
+		return errCritical
+	}
+	if errCritical, _ := data.GetErrorsResponceShift(); errCritical != nil {
+		return errCritical
+	}
+	errCritical, _ = data.GetErrorsResponceSession()
+	return errCritical
+}

@@ -22,8 +22,7 @@ type aggMileageAndHoursHandler struct {
 // метод обрабатывает сообщение от модуля aggMileageHours
 //   - ctx общий контекст storage (прекращает работу модуля)
 func (a *aggMileageAndHoursHandler) handlerMesAggMileageHours(message trunsportMes) {
-	var response interface{}
-
+	var response responceIn
 	mes, err := utils.TypeConversion[mesFromAggMileageHours](message.GetMesage())
 	if err != nil {
 		err = utils.Wrapper(handlerMesAggMileageHoursError{}, err)
@@ -38,18 +37,20 @@ func (a *aggMileageAndHoursHandler) handlerMesAggMileageHours(message trunsportM
 	message.GetChForResponse() <- response
 }
 
-func (a *aggMileageAndHoursHandler) processingMessage(mes mesFromAggMileageHours) interface{} {
-	var response interface{}
+func (a *aggMileageAndHoursHandler) processingMessage(mes mesFromAggMileageHours) responceIn {
+	var response responceIn
 	switch mes.GetType() {
 	case restoreShiftDataPerObj:
 		res := a.handlerRestoreShiftDataPerObj(mes.GetObjID())
 		res.responseShift.criticalErr, res.responseShift.err = handlingErrors(res.responseShift.err)
 		res.responseSession.criticalErr, res.responseSession.err = handlingErrors(res.responseSession.err)
 		log.Infof("Ответ по восстановлению состояния отправлен, ObjID: %d", mes.GetObjID())
+		response = res
 	default:
 		res := a.processingRequestsToAddOrUpdate(mes)
 		res.responseShift.criticalErr, res.responseShift.err = handlingErrors(res.responseShift.err)
 		res.responseSession.criticalErr, res.responseSession.err = handlingErrors(res.responseSession.err)
+		response = res
 	}
 
 	return response

@@ -12,16 +12,11 @@ type incomingMessage interface {
 
 // интерфейс сообщения от модуля storage
 type incomingMessageFromStorage interface {
-	GetDataShift() interface{}         // возвращает json, который нужно привести к структуре shiftObjData
-	GetDataDriverSession() interface{} // возвращает json, который нужно привести к структуре sessionDriverData
-	GetError() error                   // возращает ошибку
-}
-
-// интерфейс для получения ответа от Storage на запрос добавления новый записей в таблицу смены и сессий
-type responceStorageToAddNewShiftAndSession interface {
-	GetShiftId() int
-	GetSessionId() int
-	GetError() error
+	GetDataShift() interface{}
+	GetErrorsResponceShift() (error, error)
+	GetDataSession() interface{}
+	GetErrorsResponceSession() (error, error)
+	GetCriticalErr() error
 }
 
 // данные смены

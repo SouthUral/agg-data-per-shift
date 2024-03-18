@@ -1,8 +1,24 @@
 package aggmileagehours
 
 import (
+	"errors"
 	"fmt"
 	"time"
+)
+
+var (
+	errActiveEventRouter = errors.New("event router is not active")
+	// ошибка обработчика (флаг не активен)
+	errHadlerEventError          = errors.New("handler error")
+	errHandlerNotRespondingError = errors.New("the handler is not responding")
+	// ошибка восстановления состояния AggDataPerObject
+	errRestoringStateError = errors.New("restoring state AggDataPerObject error")
+	// ошибка добавления новой смены и сессии
+	errAddNewShiftAndSessionError = errors.New("error adding a new shift and a new session")
+	// ошибка добвления новой записи сессии и обновления записи смены
+	errUpdateShiftAndAddNewSessionError = errors.New("error updating the shift record and adding a new session record")
+	// ошибка обновления смены и сессии
+	errUpdateShiftAndSessionError = errors.New("shift and session update error")
 )
 
 // ошибка десериализации json
@@ -68,14 +84,6 @@ type interfaceLoadingToStructError struct {
 
 func (e interfaceLoadingToStructError) Error() string {
 	return fmt.Sprintf("%s interface loading error", e.structName)
-}
-
-// ошибка восстановления состояния AggDataPerObject
-type restoringStateError struct {
-}
-
-func (e restoringStateError) Error() string {
-	return "restoring state AggDataPerObject error"
 }
 
 // ошибка определения смены (нет смены)

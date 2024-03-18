@@ -20,6 +20,7 @@ type EventRouter struct {
 	timeMeter        *utils.ProcessingTimeMeter // измеритель времени процессов
 	cancel           func()
 	timeWaitResponse int // для горутин обработчиков, время ожидания ответа от БД
+	activeFlag       *activeFlag
 }
 
 func InitEventRouter(storageCh chan interface{}, timeWaitResponse int, timeMeter *utils.ProcessingTimeMeter) (*EventRouter, context.Context) {
@@ -33,6 +34,7 @@ func InitEventRouter(storageCh chan interface{}, timeWaitResponse int, timeMeter
 		timeWaitResponse: timeWaitResponse,
 		settingShift:     initSettingsDurationShifts(-4),
 		timeMeter:        timeMeter,
+		activeFlag:       initActiveFlag(),
 	}
 
 	// временно сам добавляю смены
@@ -43,6 +45,22 @@ func InitEventRouter(storageCh chan interface{}, timeWaitResponse int, timeMeter
 
 	go res.routing(ctx)
 
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			default:
+				if !res.activeFlag.getIsActive() {
+					res.Shudown(errHadlerEventError)
+					log.Debug("ПРОВЕРКА ФЛАГА ВЫЯВИЛА ОШИБКУ")
+					return
+				}
+				time.Sleep(1 * time.Second)
+			}
+		}
+	}()
+
 	return res, ctx
 }
 
@@ -51,6 +69,7 @@ func (e *EventRouter) GetIncomingEventCh() chan interface{} {
 }
 
 func (e *EventRouter) routing(ctx context.Context) {
+	defer log.Debug("РОУТЕР ПРЕКРАТИЛ РАБОТУ!")
 	for {
 		select {
 		case <-ctx.Done():
@@ -70,10 +89,10 @@ func (e *EventRouter) routing(ctx context.Context) {
 				return
 			}
 
-			err = e.sendingEventToAggObj(message.GetOffset(), eventData)
-			if err != nil {
-				log.Error(err)
+			e.sendingEventToAggObj(message.GetOffset(), eventData)
+			if !e.activeFlag.getIsActive() {
 				e.Shudown(err)
+				return
 			}
 		}
 	}
@@ -85,17 +104,14 @@ func (e *EventRouter) Shudown(err error) {
 	err = fmt.Errorf("%w: %w", stoppedEventRouterError{}, err)
 	log.Error(err)
 	e.cancel()
+	for _, obj := range e.aggObjs {
+		obj.Shudown()
+	}
 }
 
-func (e *EventRouter) sendingEventToAggObj(offsetEvent int64, event *eventData) error {
-	var err error
+func (e *EventRouter) sendingEventToAggObj(offsetEvent int64, event *eventData) {
 	obj := e.getAggObj(event.objectID)
-	if !obj.getIsActive() {
-		err = aggObjIsNotActiveError{event.objectID}
-		return err
-	}
 	obj.eventReception(offsetEvent, event)
-	return err
 }
 
 func (e *EventRouter) getAggObj(objId int) *AggDataPerObject {
@@ -107,12 +123,21 @@ func (e *EventRouter) getAggObj(objId int) *AggDataPerObject {
 }
 
 func (e *EventRouter) createNewAggObj(objId int) *AggDataPerObject {
-	aggObj, _ := initAggDataPerObject(objId, 100, e.timeWaitResponse, e.settingShift, e.storageCh, e.timeMeter)
+	aggObj, _ := initAggDataPerObject(objId, 100, e.timeWaitResponse, e.settingShift, e.storageCh, e.timeMeter, e.activeFlag)
 	e.aggObjs[objId] = aggObj
 	return aggObj
 }
 
 // метод для отрправки событий в роутер
-func (e *EventRouter) EventReception(event interface{}) {
-	e.incomingEventCh <- event
+func (e *EventRouter) EventReception(event interface{}) error {
+	for {
+		select {
+		case e.incomingEventCh <- event:
+			return nil
+		default:
+			if !e.activeFlag.getIsActive() {
+				return errActiveEventRouter
+			}
+		}
+	}
 }
