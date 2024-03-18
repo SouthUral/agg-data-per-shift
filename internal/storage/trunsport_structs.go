@@ -1,42 +1,66 @@
 package storage
 
 // тип для отправки ответа модулю aggMileageHours
-type answerForAggMileageHours struct {
-	shiftData   RowShiftObjData
-	sessionData RowSessionObjData
-	err         error
+type responceForAggMileageHours struct {
+	responceShiftSession[RowShiftObjData, RowSessionObjData]
 }
 
 // интерфейсный метод
-func (a answerForAggMileageHours) GetDataShift() interface{} {
-	return a.shiftData
+func (r responceForAggMileageHours) GetDataShift() interface{} {
+	return r.responseShift.data
+}
+
+func (r responceForAggMileageHours) GetErrorsResponceShift() (error, error) {
+	return r.responseShift.criticalErr, r.responseShift.err
 }
 
 // интерфейсный метод
-func (a answerForAggMileageHours) GetDataDriverSession() interface{} {
-	return a.sessionData
+func (r responceForAggMileageHours) GetDataSession() interface{} {
+	return r.responseSession.data
 }
 
-// интерфейсный метод
-func (a answerForAggMileageHours) GetError() error {
-	return a.err
+func (r responceForAggMileageHours) GetErrorsResponceSession() (error, error) {
+	return r.responseSession.criticalErr, r.responseSession.err
 }
 
 // структура используется для ответа на запрос от модуля AggMileageHours на добавление новых записей в БД
 type responceAggMileageHoursAddNewShiftAndSession struct {
-	shiftId   int
-	sessionId int
-	err       error
+	responceShiftSession[int, int]
 }
 
-func (r responceAggMileageHoursAddNewShiftAndSession) GetShiftId() int {
-	return r.shiftId
+func (r responceAggMileageHoursAddNewShiftAndSession) GetDataShift() interface{} {
+	return r.responseShift.data
 }
 
-func (r responceAggMileageHoursAddNewShiftAndSession) GetSessionId() int {
-	return r.sessionId
+func (r responceAggMileageHoursAddNewShiftAndSession) GetErrorsResponceShift() (error, error) {
+	return r.responseShift.criticalErr, r.responseShift.err
 }
 
-func (r responceAggMileageHoursAddNewShiftAndSession) GetError() error {
-	return r.err
+func (r responceAggMileageHoursAddNewShiftAndSession) GetDataSession() interface{} {
+	return r.responseSession.data
+}
+
+func (r responceAggMileageHoursAddNewShiftAndSession) GetErrorsResponceSession() (error, error) {
+	return r.responseSession.criticalErr, r.responseSession.err
+}
+
+// структура возвращает ответ от метода производящего запрос в БД
+type responceDataFromDB[D RowShiftObjData | RowSessionObjData | int] struct {
+	data             D
+	criticalErr, err error
+}
+
+// обновленная универсальная структура для ответа модулю AggMileageHours
+type responceShiftSession[Shift RowShiftObjData | int, Session RowSessionObjData | int] struct {
+	responseShift   responceDataFromDB[Shift]
+	responseSession responceDataFromDB[Session]
+	generalCriticalErr
+}
+
+type generalCriticalErr struct {
+	criticalErr error
+}
+
+func (g generalCriticalErr) GetCriticalErr() error {
+	return g.criticalErr
 }

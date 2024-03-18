@@ -22,28 +22,25 @@ func converQuery[T any](rows pgx.Rows) (T, error) {
 	return rowObj, err
 }
 
-// проверка на наличие ошибки при произведении и обработке запросов
-func handlingErrors(errors ...error) (string, error) {
-	// критическая ошибка имеет наивысший приоритет, если выйдет хотя бы одна критическая ошибка, вторая ошибка уже обрабатываться не будет, программа сразу завершится
-	// если хотя бы одна ошибка modulError то она будет передана в ответе
-	// если обе ошибки regular то никакие дейсвия предприниматься не будут, ошибка не будет передана в модуль, программа не будет завершена
-	var typeCriticalErr string
-	var err error
-	for _, err = range errors {
-		if err == nil {
-			continue
-		}
-		typeCriticalErr, err = defineTypeErrors(err)
-		switch typeCriticalErr {
-		case criticalError:
-			return typeCriticalErr, err
-		case modulError:
-			return modulError, err
-		default:
-			continue
+// принимает одну или две любые ошибки, определяет критические и регулярные ошибки.
+//   - первая ошибка - это критическая ошибка (с точки зрения storage);
+//   - вторая ошибка - регулярная (могут быть предприняты иные действия).
+func handlingErrors(errors ...error) (error, error) {
+	var criticalErr, commonErr error
+	var typeError string
+
+	for _, err := range errors {
+		if err != nil {
+			typeError, err = defineTypeErrors(err)
+			switch typeError {
+			case criticalError:
+				criticalErr = err
+			case commonError:
+				commonErr = err
+			}
 		}
 	}
-	return typeCriticalErr, err
+	return criticalErr, commonErr
 }
 
 // функция обработки ошибок, возвращает ошибку и ее определение, передать на обработку модулю который сделал запрос,
@@ -51,7 +48,7 @@ func handlingErrors(errors ...error) (string, error) {
 func defineTypeErrors(err error) (string, error) {
 	switch {
 	case errors.Is(err, noRowsError{}):
-		return modulError, err
+		return commonError, err
 	default:
 		return criticalError, err
 	}
