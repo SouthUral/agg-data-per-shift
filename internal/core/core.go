@@ -3,6 +3,7 @@ package core
 import (
 	"context"
 	"errors"
+	"sync"
 	"time"
 
 	amqp "agg-data-per-shift/internal/amqp/amqp_client"
@@ -42,6 +43,8 @@ func InitCore() {
 		cancel: cancel,
 	}
 
+	wg := &sync.WaitGroup{}
+
 	core.timeMeter, timeMeterCtx = utils.InitProcessingTimeMeter()
 	// инициализация подключения к базам
 	core.rabbit = amqp.InitRabbit(envs.rbEnvs, 30)
@@ -53,9 +56,12 @@ func InitCore() {
 	// начало прослушивания очереди
 	rabbitCtx = core.rabbit.StartRb()
 
-	go core.controlProcess(ctx, storageCtx, rabbitCtx, routerCtx, pgCtx, timeMeterCtx)
-	go core.routingEvents(ctx)
+	wg.Add(2)
+	go core.controlProcess(ctx, storageCtx, rabbitCtx, routerCtx, pgCtx, timeMeterCtx, wg)
+	go core.routingEvents(ctx, wg)
 
+	wg.Wait()
+	time.Sleep(5 * time.Second)
 }
 
 type core struct {
@@ -78,7 +84,9 @@ func (c *core) shudown(err error) {
 	log.Errorf("the program stopped working due to: %s", err.Error())
 }
 
-func (c *core) routingEvents(ctx context.Context) {
+func (c *core) routingEvents(ctx context.Context, wg *sync.WaitGroup) {
+	defer log.Warning("CORE routingEvents process has finished")
+	defer wg.Done()
 	for {
 		select {
 		case <-ctx.Done():
@@ -89,21 +97,23 @@ func (c *core) routingEvents(ctx context.Context) {
 				c.shudown(errConverRabbitMesError)
 				return
 			}
-			c.routingRabbitMes(message)
-
+			c.routingRabbitMes(ctx, message)
 		}
+		log.Debug("ПРОВЕРКА routingEvents")
 	}
 }
 
-func (c *core) routingRabbitMes(mes msgEvent) {
+func (c *core) routingRabbitMes(ctx context.Context, mes msgEvent) {
 	switch mes.GetTypeMsg() {
 	case getStreamOffset:
+		log.Debug("пришло сообщение для получения offset")
 		switch c.streamOffset {
 		case "first":
 			mes.GetReverceCh() <- answerEvent{
 				offset: 100000000,
 			}
 		default:
+
 			c.storage.GetStorageCh() <- transportStruct{
 				sender:         "amqp",
 				mesage:         mes.GetTypeMsg(),
@@ -111,8 +121,12 @@ func (c *core) routingRabbitMes(mes msgEvent) {
 			}
 		}
 	case pushEvent:
-		mes.GetReverceCh() <- answerEvent{}
-		err := c.router.EventReception(mes)
+		err := responceAmqp(ctx, mes)
+		if err != nil {
+			return
+		}
+
+		err = c.router.EventReception(ctx, mes)
 		if err != nil {
 			c.shudown(err)
 			return
@@ -123,8 +137,20 @@ func (c *core) routingRabbitMes(mes msgEvent) {
 
 }
 
-func (c *core) controlProcess(ctx, ctxStorage, ctxRabbit, ctxRouter, ctxPgConn, ctxTimeMeter context.Context) {
-	defer log.Warning("core control process has finished")
+func responceAmqp(ctx context.Context, mes msgEvent) error {
+	for {
+		select {
+		case mes.GetReverceCh() <- answerEvent{}:
+			return nil
+		case <-ctx.Done():
+			return errors.New("ctx done")
+		}
+	}
+}
+
+func (c *core) controlProcess(ctx, ctxStorage, ctxRabbit, ctxRouter, ctxPgConn, ctxTimeMeter context.Context, wg *sync.WaitGroup) {
+	defer wg.Done()
+	defer log.Warning("CORE control process has finished")
 	for {
 		select {
 		case <-ctx.Done():
@@ -141,5 +167,6 @@ func (c *core) controlProcess(ctx, ctxStorage, ctxRabbit, ctxRouter, ctxPgConn, 
 			c.shudown(errTimeMeterFinishError)
 		}
 		time.Sleep(10 * time.Millisecond)
+		log.Debug("ПРОВЕРКА controlProcess")
 	}
 }

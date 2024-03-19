@@ -127,10 +127,13 @@ func (e *EventRouter) createNewAggObj(objId int) *AggDataPerObject {
 }
 
 // метод для отрправки событий в роутер
-func (e *EventRouter) EventReception(event interface{}) error {
+func (e *EventRouter) EventReception(ctx context.Context, event interface{}) error {
 	for {
 		select {
+		case <-ctx.Done():
+			return nil
 		case e.incomingEventCh <- event:
+			log.Debug("почему-то все еще отправляет")
 			return nil
 		default:
 			if !e.activeFlag.getIsActive() {
