@@ -27,7 +27,7 @@ func InitEventRouter(storageCh chan interface{}, timeWaitResponse int, timeMeter
 	ctx, cancel := context.WithCancel(context.Background())
 
 	res := &EventRouter{
-		incomingEventCh:  make(chan interface{}),
+		incomingEventCh:  make(chan interface{}, 1000000),
 		cancel:           cancel,
 		aggObjs:          make(map[int]*AggDataPerObject),
 		storageCh:        storageCh,
@@ -56,6 +56,7 @@ func InitEventRouter(storageCh chan interface{}, timeWaitResponse int, timeMeter
 					log.Debug("ПРОВЕРКА ФЛАГА ВЫЯВИЛА ОШИБКУ")
 					return
 				}
+				log.Debugf("ЗАПОЛЕННОСТЬ БУФЕРА МАРШРУТИЗАТОРА %d", len(res.incomingEventCh))
 				time.Sleep(1 * time.Second)
 			}
 		}
@@ -89,11 +90,7 @@ func (e *EventRouter) routing(ctx context.Context) {
 				return
 			}
 
-			e.sendingEventToAggObj(message.GetOffset(), eventData)
-			if !e.activeFlag.getIsActive() {
-				e.Shudown(err)
-				return
-			}
+			e.sendingEventToAggObj(ctx, message.GetOffset(), eventData)
 		}
 	}
 
@@ -109,9 +106,10 @@ func (e *EventRouter) Shudown(err error) {
 	}
 }
 
-func (e *EventRouter) sendingEventToAggObj(offsetEvent int64, event *eventData) {
+// поиск объекта обработки, и отправка сообщения
+func (e *EventRouter) sendingEventToAggObj(ctx context.Context, offsetEvent int64, event *eventData) {
 	obj := e.getAggObj(event.objectID)
-	obj.eventReception(offsetEvent, event)
+	obj.eventReception(ctx, offsetEvent, event)
 }
 
 func (e *EventRouter) getAggObj(objId int) *AggDataPerObject {

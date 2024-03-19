@@ -36,7 +36,7 @@ func initAggDataPerObject(objectId, numAttemptRequest, timeWaitResponse int, set
 
 	res := &AggDataPerObject{
 		objectId:                objectId,
-		incomingCh:              make(chan eventForAgg, 5), // TODO: возможно нужен буферизированный канал, т.к. горутина может неуспеть обработать событие до отправки следующего
+		incomingCh:              make(chan eventForAgg, 100), // TODO: возможно нужен буферизированный канал, т.к. горутина может неуспеть обработать событие до отправки следующего
 		cancel:                  cancel,
 		settingsShift:           settingsShift,
 		storageCh:               storageCh,
@@ -358,10 +358,18 @@ func (a *AggDataPerObject) typeEventHandlig(typeEvent string) {
 }
 
 // метод для отправки события в обработчик
-func (a *AggDataPerObject) eventReception(offset int64, event *eventData) {
-	a.incomingCh <- eventForAgg{
+func (a *AggDataPerObject) eventReception(ctx context.Context, offset int64, event *eventData) {
+	mes := eventForAgg{
 		offset:    offset,
 		eventData: event,
+	}
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case a.incomingCh <- mes:
+			return
+		}
 	}
 }
 

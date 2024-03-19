@@ -22,5 +22,5 @@ func init() {
 }
 
 func main() {
-	core.StartService()
+	core.InitCore()
 }

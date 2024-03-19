@@ -1,7 +1,8 @@
 package core
 
 import (
-	"fmt"
+	"context"
+	"errors"
 	"time"
 
 	amqp "agg-data-per-shift/internal/amqp/amqp_client"
@@ -12,11 +13,23 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-// функция запускает сервис
-func StartService() {
-	// var targetCount int = 5000
+const (
+	getStreamOffset = "GetOffset"
+	pushEvent       = "InputMSG"
+)
 
-	streamOffset := "first"
+var (
+	errRabbitShutdownError       = errors.New("the rabbit module has stopped working")
+	errUncknowTypeRabbitMesError = errors.New("unknown message type from the rabbit module")
+	errStorageShutdownError      = errors.New("the storage module has stopped working")
+	errRouterShutdownError       = errors.New("the router module has stopped working")
+	errConverRabbitMesError      = errors.New("error converting a message from rabbit")
+	errPgConnShutdownError       = errors.New("pgConn has stopped working")
+	errTimeMeterFinishError      = errors.New("timeMeter has stopped working")
+)
+
+func InitCore() {
+	var storageCtx, pgCtx, rabbitCtx, routerCtx, timeMeterCtx context.Context
 
 	envs, err := getEnvs()
 	if err != nil {
@@ -24,85 +37,109 @@ func StartService() {
 		return
 	}
 
-	timeMeter := utils.InitProcessingTimeMeter()
-	defer timeMeter.GetAnaliticsForAllProcess()
-	defer timeMeter.Shudown()
-	defer time.Sleep(3 * time.Second)
+	ctx, cancel := context.WithCancel(context.Background())
+	core := core{
+		cancel: cancel,
+	}
 
+	core.timeMeter, timeMeterCtx = utils.InitProcessingTimeMeter()
 	// инициализация подключения к базам
-	rb := amqp.InitRabbit(envs.rbEnvs, 30)
-	db, dbCtx := storage.InitPgConn(envs.pgEnvs, 1000, 1000, 20)
+	core.rabbit = amqp.InitRabbit(envs.rbEnvs, 30)
+	core.pgConn, pgCtx = storage.InitPgConn(envs.pgEnvs, 1000, 1000, 20)
 
-	// инициализация логики
-	st, ctxSt := storage.InitStorageMessageHandler(db)
-	ag, ctxAg := aggMileage.InitEventRouter(st.GetStorageCh(), 10, timeMeter)
+	core.storage, storageCtx = storage.InitStorageMessageHandler(core.pgConn)
+	core.router, routerCtx = aggMileage.InitEventRouter(core.storage.GetStorageCh(), 10, core.timeMeter)
 
 	// начало прослушивания очереди
-	ctxRb := rb.StartRb()
+	rabbitCtx = core.rabbit.StartRb()
 
+	go core.controlProcess(ctx, storageCtx, rabbitCtx, routerCtx, pgCtx, timeMeterCtx)
+	go core.routingEvents(ctx)
+
+}
+
+type core struct {
+	timeMeter    *utils.ProcessingTimeMeter
+	rabbit       *amqp.Rabbit
+	storage      *storage.StorageMessageHandler
+	pgConn       *storage.PgConn
+	router       *aggMileage.EventRouter
+	streamOffset string
+	cancel       func()
+}
+
+func (c *core) shudown(err error) {
+	c.storage.Shutdown(err)
+	c.rabbit.RabbitShutdown(err)
+	c.router.Shudown(err)
+	c.pgConn.Shutdown(err)
+	c.timeMeter.Shudown()
+	c.cancel()
+	log.Errorf("the program stopped working due to: %s", err.Error())
+}
+
+func (c *core) routingEvents(ctx context.Context) {
 	for {
 		select {
-		case <-dbCtx.Done():
-			rb.RabbitShutdown(fmt.Errorf("db закончил работу"))
-			ag.Shudown(fmt.Errorf("db закончил работу"))
-			st.Shutdown(fmt.Errorf("db закончил работу"))
+		case <-ctx.Done():
 			return
-		case <-ctxRb.Done():
-			ag.Shudown(fmt.Errorf("rabbitMQ закончил работу"))
-			st.Shutdown(fmt.Errorf("rabbitMQ закончил работу"))
-			return
-		case <-ctxAg.Done():
-			rb.RabbitShutdown(fmt.Errorf("роутер закончил работу"))
-			st.Shutdown(fmt.Errorf("роутер закончил работу"))
-			return
-		case <-ctxSt.Done():
-			ag.Shudown(fmt.Errorf("ошибка storage"))
-			rb.RabbitShutdown(fmt.Errorf("ошибка storage"))
-			return
-		case msg := <-rb.GetChan():
+		case msg := <-c.rabbit.GetChan():
 			message, ok := msg.(msgEvent)
 			if !ok {
-				rb.RabbitShutdown(fmt.Errorf("ошибка приведения типа"))
+				c.shudown(errConverRabbitMesError)
 				return
 			}
-			switch message.GetTypeMsg() {
-			case "GetOffset":
-				switch streamOffset {
-				case "first":
-					message.GetReverceCh() <- answerEvent{
-						offset: 100000000,
-					}
-				default:
-					st.GetStorageCh() <- transportStruct{
-						sender:         "amqp",
-						mesage:         message.GetTypeMsg(),
-						reverseChannel: message.GetReverceCh(),
-					}
-				}
-			case "InputMSG":
-				// counter, _ := timeMeter.GetCounterOnKey("eventHandling")
-				// if counter >= targetCount {
-				// 	ag.Shudown(fmt.Errorf("цель достигнута"))
-				// 	st.Shutdown(fmt.Errorf("цель достигнута"))
-				// 	rb.RabbitShutdown(fmt.Errorf("цель достигнута"))
-				// 	log.Infof("counter = %d", counter)
-				// 	return
-				// }
-				log.Debugf("offset: %d", message.GetOffset())
-				message.GetReverceCh() <- answerEvent{}
-				err := ag.EventReception(message)
-				if err != nil {
-					log.Error(err)
-					rb.RabbitShutdown(err)
-					ag.Shudown(err)
-					st.Shutdown(err)
-					return
-				}
+			c.routingRabbitMes(message)
 
-			default:
-				rb.RabbitShutdown(fmt.Errorf("неизвестный тип событий"))
-				return
+		}
+	}
+}
+
+func (c *core) routingRabbitMes(mes msgEvent) {
+	switch mes.GetTypeMsg() {
+	case getStreamOffset:
+		switch c.streamOffset {
+		case "first":
+			mes.GetReverceCh() <- answerEvent{
+				offset: 100000000,
+			}
+		default:
+			c.storage.GetStorageCh() <- transportStruct{
+				sender:         "amqp",
+				mesage:         mes.GetTypeMsg(),
+				reverseChannel: mes.GetReverceCh(),
 			}
 		}
+	case pushEvent:
+		mes.GetReverceCh() <- answerEvent{}
+		err := c.router.EventReception(mes)
+		if err != nil {
+			c.shudown(err)
+			return
+		}
+	default:
+		c.shudown(errUncknowTypeRabbitMesError)
+	}
+
+}
+
+func (c *core) controlProcess(ctx, ctxStorage, ctxRabbit, ctxRouter, ctxPgConn, ctxTimeMeter context.Context) {
+	defer log.Warning("core control process has finished")
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ctxStorage.Done():
+			c.shudown(errStorageShutdownError)
+		case <-ctxRabbit.Done():
+			c.shudown(errRabbitShutdownError)
+		case <-ctxRouter.Done():
+			c.shudown(errRouterShutdownError)
+		case <-ctxPgConn.Done():
+			c.shudown(errPgConnShutdownError)
+		case <-ctxTimeMeter.Done():
+			c.shudown(errTimeMeterFinishError)
+		}
+		time.Sleep(10 * time.Millisecond)
 	}
 }

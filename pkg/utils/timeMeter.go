@@ -22,7 +22,7 @@ func (p *ProcessingTimeMeter) GetAnaliticsForAllProcess() {
 	}
 }
 
-func InitProcessingTimeMeter() *ProcessingTimeMeter {
+func InitProcessingTimeMeter() (*ProcessingTimeMeter, context.Context) {
 	ctx, cancel := context.WithCancel(context.Background())
 	p := &ProcessingTimeMeter{
 		incomingCh:    make(chan TrunsportToProcessingTime, 100),
@@ -31,7 +31,7 @@ func InitProcessingTimeMeter() *ProcessingTimeMeter {
 		mx:            &sync.RWMutex{},
 	}
 	go p.process(ctx)
-	return p
+	return p, ctx
 }
 
 // метод закрывает горутину структуры ProcessingTimeMeter
@@ -50,7 +50,10 @@ func (p *ProcessingTimeMeter) GetCounterOnKey(key string) (int, bool) {
 }
 
 func (p *ProcessingTimeMeter) SendMessToTimeMeter(msg TrunsportToProcessingTime) {
-	p.incomingCh <- msg
+	select {
+	case p.incomingCh <- msg:
+		return
+	}
 }
 
 func (p *ProcessingTimeMeter) process(ctx context.Context) {
