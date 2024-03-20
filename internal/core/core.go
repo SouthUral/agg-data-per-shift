@@ -157,15 +157,22 @@ func (c *core) controlProcess(ctx, ctxStorage, ctxRabbit, ctxRouter, ctxPgConn, 
 			return
 		case <-ctxStorage.Done():
 			c.shudown(errStorageShutdownError)
+			return
 		case <-ctxRabbit.Done():
 			c.shudown(errRabbitShutdownError)
+			return
 		case <-ctxRouter.Done():
 			c.shudown(errRouterShutdownError)
+			return
 		case <-ctxPgConn.Done():
 			c.shudown(errPgConnShutdownError)
+			return
 		case <-ctxTimeMeter.Done():
 			c.shudown(errTimeMeterFinishError)
+			return
+		default:
+			time.Sleep(10 * time.Millisecond)
 		}
-		time.Sleep(10 * time.Millisecond)
+
 	}
 }
