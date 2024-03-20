@@ -13,28 +13,26 @@ import (
 // структура в которой происходит распределение событий по горутинам объектов техники
 // ---
 type EventRouter struct {
-	incomingEventCh  chan interface{}           // канал для получения событий
-	storageCh        chan interface{}           // канал для связи с модулем psql
-	aggObjs          map[int]*AggDataPerObject  // map с объектами агрегации данных (по id техники)
-	settingShift     *settingsDurationShifts    // настройки смены
-	timeMeter        *utils.ProcessingTimeMeter // измеритель времени процессов
-	cancel           func()
-	timeWaitResponse int // для горутин обработчиков, время ожидания ответа от БД
-	activeFlag       *activeFlag
+	incomingEventCh chan interface{}           // канал для получения событий
+	storageCh       chan interface{}           // канал для связи с модулем psql
+	aggObjs         map[int]*AggDataPerObject  // map с объектами агрегации данных (по id техники)
+	settingShift    *settingsDurationShifts    // настройки смены
+	timeMeter       *utils.ProcessingTimeMeter // измеритель времени процессов
+	cancel          func()
+	activeFlag      *activeFlag
 }
 
-func InitEventRouter(storageCh chan interface{}, timeWaitResponse int, timeMeter *utils.ProcessingTimeMeter) (*EventRouter, context.Context) {
+func InitEventRouter(storageCh chan interface{}, timeMeter *utils.ProcessingTimeMeter) (*EventRouter, context.Context) {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	res := &EventRouter{
-		incomingEventCh:  make(chan interface{}, 1000000),
-		cancel:           cancel,
-		aggObjs:          make(map[int]*AggDataPerObject),
-		storageCh:        storageCh,
-		timeWaitResponse: timeWaitResponse,
-		settingShift:     initSettingsDurationShifts(-4),
-		timeMeter:        timeMeter,
-		activeFlag:       initActiveFlag(),
+		incomingEventCh: make(chan interface{}, 1000000),
+		cancel:          cancel,
+		aggObjs:         make(map[int]*AggDataPerObject),
+		storageCh:       storageCh,
+		settingShift:    initSettingsDurationShifts(-4),
+		timeMeter:       timeMeter,
+		activeFlag:      initActiveFlag(),
 	}
 
 	// временно сам добавляю смены
@@ -121,19 +119,21 @@ func (e *EventRouter) getAggObj(objId int) *AggDataPerObject {
 }
 
 func (e *EventRouter) createNewAggObj(objId int) *AggDataPerObject {
-	aggObj, _ := initAggDataPerObject(objId, 100, e.timeWaitResponse, e.settingShift, e.storageCh, e.timeMeter, e.activeFlag)
+	aggObj, _ := initAggDataPerObject(objId, 100, e.settingShift, e.storageCh, e.timeMeter, e.activeFlag)
 	e.aggObjs[objId] = aggObj
 	return aggObj
 }
 
 // метод для отрправки событий в роутер
 func (e *EventRouter) EventReception(ctx context.Context, event interface{}) error {
+	if !e.activeFlag.getIsActive() {
+		return errActiveEventRouter
+	}
 	for {
 		select {
 		case <-ctx.Done():
 			return nil
 		case e.incomingEventCh <- event:
-			log.Debug("почему-то все еще отправляет")
 			return nil
 		default:
 			if !e.activeFlag.getIsActive() {

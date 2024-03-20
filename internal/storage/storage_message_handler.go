@@ -58,17 +58,17 @@ func (s *StorageMessageHandler) listenAndServe(ctx context.Context) {
 				err = utils.Wrapper(listenAndServeError{}, err)
 				s.Shutdown(err)
 			}
-			s.handleRequests(message)
+			s.handleRequests(ctx, message)
 		}
 	}
 
 }
 
 // обработчик запросов
-func (s *StorageMessageHandler) handleRequests(message trunsportMes) {
+func (s *StorageMessageHandler) handleRequests(ctx context.Context, message trunsportMes) {
 	switch message.GetSender() {
 	case aggMileageHours:
-		go s.handlerMesAggMileageHours(message)
+		go s.handlerMesAggMileageHours(ctx, message)
 	case amqp:
 		go s.handlerMsgFromAmqp(message)
 	default:

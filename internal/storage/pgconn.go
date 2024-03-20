@@ -131,7 +131,6 @@ func (p *PgConn) QueryDB(query string, args ...any) (pgx.Rows, error) {
 
 	rows, err := p.dbpool.Query(ctx, query, args...)
 	if err != nil {
-		err = utils.Wrapper(queryDBError{}, err)
 		log.Error(err)
 	}
 	return rows, err

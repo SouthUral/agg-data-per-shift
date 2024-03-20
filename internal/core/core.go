@@ -48,10 +48,10 @@ func InitCore() {
 	core.timeMeter, timeMeterCtx = utils.InitProcessingTimeMeter()
 	// инициализация подключения к базам
 	core.rabbit = amqp.InitRabbit(envs.rbEnvs, 30)
-	core.pgConn, pgCtx = storage.InitPgConn(envs.pgEnvs, 1000, 1000, 20)
+	core.pgConn, pgCtx = storage.InitPgConn(envs.pgEnvs, 1000, 1000, 10)
 
 	core.storage, storageCtx = storage.InitStorageMessageHandler(core.pgConn)
-	core.router, routerCtx = aggMileage.InitEventRouter(core.storage.GetStorageCh(), 10, core.timeMeter)
+	core.router, routerCtx = aggMileage.InitEventRouter(core.storage.GetStorageCh(), core.timeMeter)
 
 	// начало прослушивания очереди
 	rabbitCtx = core.rabbit.StartRb()
@@ -167,6 +167,5 @@ func (c *core) controlProcess(ctx, ctxStorage, ctxRabbit, ctxRouter, ctxPgConn, 
 			c.shudown(errTimeMeterFinishError)
 		}
 		time.Sleep(10 * time.Millisecond)
-		log.Debug("ПРОВЕРКА controlProcess")
 	}
 }

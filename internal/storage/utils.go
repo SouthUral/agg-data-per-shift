@@ -6,6 +6,8 @@ import (
 	utils "agg-data-per-shift/pkg/utils"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
+	log "github.com/sirupsen/logrus"
 )
 
 func converQuery[T any](rows pgx.Rows) (T, error) {
@@ -46,10 +48,40 @@ func handlingErrors(errors ...error) (error, error) {
 // функция обработки ошибок, возвращает ошибку и ее определение, передать на обработку модулю который сделал запрос,
 // обработать ошибку на месте, или завершить работу (если ошибка критическая)
 func defineTypeErrors(err error) (string, error) {
+	var pgConnError *pgconn.ConnectError
+	log.Errorf("ОБНАРУЖЕНА ОШИБКА %s", err)
+	if ok, pgError := handlerPgxErrors(err); ok {
+		log.Errorf("CODE PGERROR: %s, MESSAGE PGERROR: %s", pgError.Code, pgError.Message)
+		return commonError, err
+	}
+	if errors.As(err, &pgConnError) {
+		return commonError, err
+	}
 	switch {
 	case errors.Is(err, noRowsError{}):
 		return commonError, err
+	// case err.Error() == "FATAL: terminating connection due to administrator command (SQLSTATE 57P01)":
+	// 	return commonError, err
 	default:
 		return criticalError, err
 	}
 }
+
+func handlerPgxErrors(err error) (bool, *pgconn.PgError) {
+	var pgErr *pgconn.PgError
+	var isPgErr bool
+	if err != nil {
+		isPgErr = errors.As(err, &pgErr)
+		if isPgErr {
+			return isPgErr, pgErr
+		}
+	}
+	return isPgErr, pgErr
+}
+
+// func comparisonPgErrorCode(pgCode string) {
+// 	switch pgCode {
+// 	case
+// 	}
+
+// }

@@ -1,8 +1,10 @@
 package storage
 
 import (
+	"context"
 	"errors"
 	"sync"
+	"time"
 
 	utils "agg-data-per-shift/pkg/utils"
 
@@ -21,7 +23,7 @@ type aggMileageAndHoursHandler struct {
 
 // метод обрабатывает сообщение от модуля aggMileageHours
 //   - ctx общий контекст storage (прекращает работу модуля)
-func (a *aggMileageAndHoursHandler) handlerMesAggMileageHours(message trunsportMes) {
+func (a *aggMileageAndHoursHandler) handlerMesAggMileageHours(ctx context.Context, message trunsportMes) {
 	var response responceIn
 	mes, err := utils.TypeConversion[mesFromAggMileageHours](message.GetMesage())
 	if err != nil {
@@ -31,13 +33,13 @@ func (a *aggMileageAndHoursHandler) handlerMesAggMileageHours(message trunsportM
 		r.criticalErr = err
 		response = r
 	} else {
-		response = a.processingMessage(mes)
+		response = a.processingMessage(ctx, mes)
 	}
 
 	message.GetChForResponse() <- response
 }
 
-func (a *aggMileageAndHoursHandler) processingMessage(mes mesFromAggMileageHours) responceIn {
+func (a *aggMileageAndHoursHandler) processingMessage(ctx context.Context, mes mesFromAggMileageHours) responceIn {
 	var response responceIn
 	switch mes.GetType() {
 	case restoreShiftDataPerObj:
@@ -47,10 +49,7 @@ func (a *aggMileageAndHoursHandler) processingMessage(mes mesFromAggMileageHours
 		log.Infof("Ответ по восстановлению состояния отправлен, ObjID: %d", mes.GetObjID())
 		response = res
 	default:
-		res := a.processingRequestsToAddOrUpdate(mes)
-		res.responseShift.criticalErr, res.responseShift.err = handlingErrors(res.responseShift.err)
-		res.responseSession.criticalErr, res.responseSession.err = handlingErrors(res.responseSession.err)
-		response = res
+		response = a.processingRequestsToAddOrUpdate(ctx, mes)
 	}
 
 	return response
@@ -88,7 +87,7 @@ func (a *aggMileageAndHoursHandler) handlerRestoreShiftDataPerObj(objId int) res
 }
 
 // метод обрабатывает запросы на модуля агрегации на обновление или добавление записей в таблицы
-func (a *aggMileageAndHoursHandler) processingRequestsToAddOrUpdate(mes mesFromAggMileageHours) responceAggMileageHoursAddNewShiftAndSession {
+func (a *aggMileageAndHoursHandler) processingRequestsToAddOrUpdate(ctx context.Context, mes mesFromAggMileageHours) responceAggMileageHoursAddNewShiftAndSession {
 	var response responceAggMileageHoursAddNewShiftAndSession
 
 	shift, session, err := a.convertDataShiftAndSession(mes.GetShiftData(), mes.GetSessionData())
@@ -96,19 +95,39 @@ func (a *aggMileageAndHoursHandler) processingRequestsToAddOrUpdate(mes mesFromA
 		response.criticalErr = err
 		return response
 	}
-	switch mes.GetType() {
-	case addNewShiftAndSession:
-		log.Debugf("Добавление новых записей смены и сессии для объекта: %d", mes.GetObjID())
-		response.responseShift, response.responseSession = a.handlerAddNewShiftAndSession(mes.GetObjID(), shift, session)
-	case updateShiftAndAddNewSession:
-		log.Debugf("Добавление новой записи сессии, обновление записи смены для объекта : %d", mes.GetObjID())
-		response.responseShift, response.responseSession = a.handlerUpdateShiftAndAddNewSession(mes.GetObjID(), shift, session)
-	case updateShiftAndSession:
-		log.Debugf("Обновление записи сессии, обновление записи смены для объекта : %d", mes.GetObjID())
-		response.responseShift, response.responseSession = a.handlerUpdateShiftAndSession(shift, session)
-	}
+	// запуск бесконечного цикла, пока не будет получен ответ из БД или пока не будет отменен контекст
+	for {
+		select {
+		case <-ctx.Done():
+			return response
+		default:
+			switch mes.GetType() {
+			case addNewShiftAndSession:
+				log.Debugf("Добавление новых записей смены и сессии для объекта: %d", mes.GetObjID())
+				response.responseShift, response.responseSession = a.handlerAddNewShiftAndSession(mes.GetObjID(), shift, session)
+			case updateShiftAndAddNewSession:
+				log.Debugf("Добавление новой записи сессии, обновление записи смены для объекта : %d", mes.GetObjID())
+				response.responseShift, response.responseSession = a.handlerUpdateShiftAndAddNewSession(mes.GetObjID(), shift, session)
+			case updateShiftAndSession:
+				log.Debugf("Обновление записи сессии, обновление записи смены для объекта : %d", mes.GetObjID())
+				response.responseShift, response.responseSession = a.handlerUpdateShiftAndSession(shift, session)
+			}
 
-	return response
+			response.responseShift.criticalErr, response.responseShift.err = handlingErrors(response.responseShift.err)
+			response.responseSession.criticalErr, response.responseSession.err = handlingErrors(response.responseSession.err)
+			if response.responseShift.criticalErr != nil || response.responseSession.criticalErr != nil {
+				log.Debugf("КРИТИЧЕСКАЯ ОШИБКА ЗАПРОСА %s", mes.GetType())
+				return response
+			}
+			if response.responseShift.err != nil || response.responseSession.err != nil {
+				time.Sleep(1 * time.Second)
+				log.Debugf("ПОВТОР ЗАПРОСА %s", mes.GetType())
+				continue
+			}
+			return response
+
+		}
+	}
 }
 
 // статический метод для конвертации данных из интерфейсов в струкруты shiftDataFromModule и sessionDataFromModule
