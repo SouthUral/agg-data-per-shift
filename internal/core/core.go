@@ -41,6 +41,7 @@ func InitCore() {
 	ctx, cancel := context.WithCancel(context.Background())
 	core := core{
 		cancel: cancel,
+		// streamOffset: "first",
 	}
 
 	wg := &sync.WaitGroup{}
@@ -48,7 +49,7 @@ func InitCore() {
 	core.timeMeter, timeMeterCtx = utils.InitProcessingTimeMeter()
 	// инициализация подключения к базам
 	core.rabbit = amqp.InitRabbit(envs.rbEnvs, 30)
-	core.pgConn, pgCtx = storage.InitPgConn(envs.pgEnvs, 1000, 1000, 10)
+	core.pgConn, pgCtx = storage.InitPgConn(envs.pgEnvs, 1000, 1000, 60, 10, 10000)
 
 	core.storage, storageCtx = storage.InitStorageMessageHandler(core.pgConn)
 	core.router, routerCtx = aggMileage.InitEventRouter(core.storage.GetStorageCh(), core.timeMeter)
@@ -99,7 +100,7 @@ func (c *core) routingEvents(ctx context.Context, wg *sync.WaitGroup) {
 			}
 			c.routingRabbitMes(ctx, message)
 		}
-		log.Debug("ПРОВЕРКА routingEvents")
+		// log.Debug("ПРОВЕРКА routingEvents")
 	}
 }
 

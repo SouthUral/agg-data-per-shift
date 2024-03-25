@@ -2,6 +2,7 @@ package storage
 
 import (
 	utils "agg-data-per-shift/pkg/utils"
+	"context"
 
 	log "github.com/sirupsen/logrus"
 )
@@ -19,19 +20,18 @@ type amqpHandler struct {
 }
 
 // метод запускается как горутина
-func (a *amqpHandler) handlerMsgFromAmqp(msg trunsportMes) {
+func (a *amqpHandler) handlerMsgFromAmqp(ctx context.Context, msg trunsportMes) {
 	message, err := utils.TypeConversion[string](msg.GetMesage())
 	if err != nil {
-		// TODO: нужно отправить ошибку в распределитель сообщений
 		return
 	}
+
 	switch message {
 	case getOffsetForAmqp:
-		offset, err := a.getStreamLastOffset()
+		offset, err := a.getStreamLastOffset(ctx)
 		if err != nil {
 			err = utils.Wrapper(getStreamsOffsetError{}, err)
 			log.Error(err)
-			// TODO: нужно отправить ошибку в распределитель сообщений
 			return
 		}
 		log.Debugf("Получен последний оффсет из БД %d", offset)
@@ -45,10 +45,11 @@ func (a *amqpHandler) handlerMsgFromAmqp(msg trunsportMes) {
 }
 
 // метод получения stream`s offset
-func (a *amqpHandler) getStreamLastOffset() (int, error) {
+func (a *amqpHandler) getStreamLastOffset(ctx context.Context) (int, error) {
 	var offset int
-	row := a.dbConn.QueryRowDB(getStreamOffset)
-	err := row.Scan(&offset)
+	// row := a.dbConn.QueryRowDB(getStreamOffset)
+	// err := row.Scan(&offset)
+	err := a.dbConn.QueryRowWithResponseInt(ctx, getStreamOffset, &offset)
 	return offset, err
 }
 

@@ -70,7 +70,7 @@ func (s *StorageMessageHandler) handleRequests(ctx context.Context, message trun
 	case aggMileageHours:
 		go s.handlerMesAggMileageHours(ctx, message)
 	case amqp:
-		go s.handlerMsgFromAmqp(message)
+		go s.handlerMsgFromAmqp(ctx, message)
 	default:
 		log.Errorf("unknown sender: %s", message.GetSender())
 	}

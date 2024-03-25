@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"sync"
-	"time"
 
 	utils "agg-data-per-shift/pkg/utils"
 
@@ -43,11 +42,8 @@ func (a *aggMileageAndHoursHandler) processingMessage(ctx context.Context, mes m
 	var response responceIn
 	switch mes.GetType() {
 	case restoreShiftDataPerObj:
-		res := a.handlerRestoreShiftDataPerObj(mes.GetObjID())
-		res.responseShift.criticalErr, res.responseShift.err = handlingErrors(res.responseShift.err)
-		res.responseSession.criticalErr, res.responseSession.err = handlingErrors(res.responseSession.err)
+		response = a.handlerRestoreShiftDataPerObj(ctx, mes.GetObjID())
 		log.Infof("Ответ по восстановлению состояния отправлен, ObjID: %d", mes.GetObjID())
-		response = res
 	default:
 		response = a.processingRequestsToAddOrUpdate(ctx, mes)
 	}
@@ -56,7 +52,7 @@ func (a *aggMileageAndHoursHandler) processingMessage(ctx context.Context, mes m
 }
 
 // метод производит два ассинхронных запроса на получение строк из БД
-func (a *aggMileageAndHoursHandler) handlerRestoreShiftDataPerObj(objId int) responceForAggMileageHours {
+func (a *aggMileageAndHoursHandler) handlerRestoreShiftDataPerObj(ctx context.Context, objId int) responceForAggMileageHours {
 	defer log.Infof("Закончена обработка запроса на восстановления данных для объекта: %d", objId)
 	var responce responceForAggMileageHours
 	wg := sync.WaitGroup{}
@@ -64,9 +60,10 @@ func (a *aggMileageAndHoursHandler) handlerRestoreShiftDataPerObj(objId int) res
 
 	go func() {
 		defer wg.Done()
-		res, err := a.dbConn.QueryDB(getLastObjShift, objId)
+		res, err := a.dbConn.QueryDB(ctx, getLastObjShift, objId)
 		if err != nil {
-			responce.responseShift.err = err
+			// теперь это всегда критическая ошибка
+			responce.responseShift.criticalErr = err
 			return
 		}
 		responce.responseShift.data, responce.responseShift.err = converQuery[RowShiftObjData](res)
@@ -74,9 +71,10 @@ func (a *aggMileageAndHoursHandler) handlerRestoreShiftDataPerObj(objId int) res
 
 	go func() {
 		defer wg.Done()
-		res, err := a.dbConn.QueryDB(getLastObjSession, objId)
+		res, err := a.dbConn.QueryDB(ctx, getLastObjSession, objId)
 		if err != nil {
-			responce.responseShift.err = err
+			// теперь это всегда критическая ошибка
+			responce.responseShift.criticalErr = err
 			return
 		}
 		responce.responseSession.data, responce.responseSession.err = converQuery[RowSessionObjData](res)
@@ -95,39 +93,20 @@ func (a *aggMileageAndHoursHandler) processingRequestsToAddOrUpdate(ctx context.
 		response.criticalErr = err
 		return response
 	}
-	// запуск бесконечного цикла, пока не будет получен ответ из БД или пока не будет отменен контекст
-	for {
-		select {
-		case <-ctx.Done():
-			return response
-		default:
-			switch mes.GetType() {
-			case addNewShiftAndSession:
-				log.Debugf("Добавление новых записей смены и сессии для объекта: %d", mes.GetObjID())
-				response.responseShift, response.responseSession = a.handlerAddNewShiftAndSession(mes.GetObjID(), shift, session)
-			case updateShiftAndAddNewSession:
-				log.Debugf("Добавление новой записи сессии, обновление записи смены для объекта : %d", mes.GetObjID())
-				response.responseShift, response.responseSession = a.handlerUpdateShiftAndAddNewSession(mes.GetObjID(), shift, session)
-			case updateShiftAndSession:
-				log.Debugf("Обновление записи сессии, обновление записи смены для объекта : %d", mes.GetObjID())
-				response.responseShift, response.responseSession = a.handlerUpdateShiftAndSession(shift, session)
-			}
 
-			response.responseShift.criticalErr, response.responseShift.err = handlingErrors(response.responseShift.err)
-			response.responseSession.criticalErr, response.responseSession.err = handlingErrors(response.responseSession.err)
-			if response.responseShift.criticalErr != nil || response.responseSession.criticalErr != nil {
-				log.Debugf("КРИТИЧЕСКАЯ ОШИБКА ЗАПРОСА %s", mes.GetType())
-				return response
-			}
-			if response.responseShift.err != nil || response.responseSession.err != nil {
-				time.Sleep(1 * time.Second)
-				log.Debugf("ПОВТОР ЗАПРОСА %s", mes.GetType())
-				continue
-			}
-			return response
-
-		}
+	switch mes.GetType() {
+	case addNewShiftAndSession:
+		log.Debugf("Добавление новых записей смены и сессии для объекта: %d", mes.GetObjID())
+		response.responseShift, response.responseSession = a.handlerAddNewShiftAndSession(ctx, mes.GetObjID(), shift, session)
+	case updateShiftAndAddNewSession:
+		log.Debugf("Добавление новой записи сессии, обновление записи смены для объекта : %d", mes.GetObjID())
+		response.responseShift, response.responseSession = a.handlerUpdateShiftAndAddNewSession(ctx, mes.GetObjID(), shift, session)
+	case updateShiftAndSession:
+		log.Debugf("Обновление записи сессии, обновление записи смены для объекта : %d", mes.GetObjID())
+		response.responseShift, response.responseSession = a.handlerUpdateShiftAndSession(ctx, shift, session)
 	}
+
+	return response
 }
 
 // статический метод для конвертации данных из интерфейсов в струкруты shiftDataFromModule и sessionDataFromModule
@@ -149,30 +128,30 @@ func (a *aggMileageAndHoursHandler) convertDataShiftAndSession(shiftData, sessio
 	return shiftStructData, sessionStructData, err
 }
 
-func (a *aggMileageAndHoursHandler) handlerAddNewShiftAndSession(objId int, shiftStructData shiftDataFromModule, sessionStructData sessionDataFromModule) (responceDataFromDB[int], responceDataFromDB[int]) {
+func (a *aggMileageAndHoursHandler) handlerAddNewShiftAndSession(ctx context.Context, objId int, shiftStructData shiftDataFromModule, sessionStructData sessionDataFromModule) (responceDataFromDB[int], responceDataFromDB[int]) {
 	var respShift, respSession responceDataFromDB[int]
 
-	respShift.err = a.makeRquestAddNewShift(shiftStructData, objId, &respShift.data)
+	respShift.criticalErr = a.makeRquestAddNewShift(ctx, shiftStructData, objId, &respShift.data)
 	if respShift.err != nil {
 		return respShift, respSession
 	}
-	respSession.err = a.makeRquestAddNewSession(sessionStructData, objId, respShift.data, &respSession.data)
+	respSession.criticalErr = a.makeRquestAddNewSession(ctx, sessionStructData, objId, respShift.data, &respSession.data)
 
 	return respShift, respSession
 }
 
-func (a *aggMileageAndHoursHandler) handlerUpdateShiftAndAddNewSession(objId int, shiftStructData shiftDataFromModule, sessionStructData sessionDataFromModule) (responceDataFromDB[int], responceDataFromDB[int]) {
+func (a *aggMileageAndHoursHandler) handlerUpdateShiftAndAddNewSession(ctx context.Context, objId int, shiftStructData shiftDataFromModule, sessionStructData sessionDataFromModule) (responceDataFromDB[int], responceDataFromDB[int]) {
 	var respShift, respSession responceDataFromDB[int]
 	wg := sync.WaitGroup{}
 	wg.Add(2)
 
 	go func() {
-		respSession.err = a.makeRquestAddNewSession(sessionStructData, objId, shiftStructData.mainData.GetShiftId(), &respSession.data)
+		respSession.criticalErr = a.makeRquestAddNewSession(ctx, sessionStructData, objId, shiftStructData.mainData.GetShiftId(), &respSession.data)
 		wg.Done()
 	}()
 
 	go func() {
-		respShift.err = a.makeRequestUpdateShift(shiftStructData)
+		respShift.criticalErr = a.makeRequestUpdateShift(ctx, shiftStructData)
 		wg.Done()
 	}()
 
@@ -180,18 +159,18 @@ func (a *aggMileageAndHoursHandler) handlerUpdateShiftAndAddNewSession(objId int
 	return respShift, respSession
 }
 
-func (a *aggMileageAndHoursHandler) handlerUpdateShiftAndSession(shiftStructData shiftDataFromModule, sessionStructData sessionDataFromModule) (responceDataFromDB[int], responceDataFromDB[int]) {
+func (a *aggMileageAndHoursHandler) handlerUpdateShiftAndSession(ctx context.Context, shiftStructData shiftDataFromModule, sessionStructData sessionDataFromModule) (responceDataFromDB[int], responceDataFromDB[int]) {
 	var respShift, respSession responceDataFromDB[int]
 	wg := sync.WaitGroup{}
 	wg.Add(2)
 
 	go func() {
-		respShift.err = a.makeRequestUpdateShift(shiftStructData)
+		respShift.criticalErr = a.makeRequestUpdateShift(ctx, shiftStructData)
 		wg.Done()
 	}()
 
 	go func() {
-		respSession.err = a.makeRequestUpdateSession(sessionStructData)
+		respSession.criticalErr = a.makeRequestUpdateSession(ctx, sessionStructData)
 		wg.Done()
 	}()
 
@@ -200,8 +179,8 @@ func (a *aggMileageAndHoursHandler) handlerUpdateShiftAndSession(shiftStructData
 }
 
 // метод делает запрос в БД на добавлении новой смены в таблицу
-func (a *aggMileageAndHoursHandler) makeRquestAddNewShift(shiftStructData shiftDataFromModule, objId int, shifId *int) error {
-	err := a.dbConn.QueryRowDB(addNewShift,
+func (a *aggMileageAndHoursHandler) makeRquestAddNewShift(ctx context.Context, shiftStructData shiftDataFromModule, objId int, shifId *int) error {
+	err := a.dbConn.QueryRowWithResponseInt(ctx, addNewShift, shifId,
 		shiftStructData.mainData.GetShiftNum(),
 		objId,
 		shiftStructData.mainData.GetShiftDateStart(),
@@ -224,16 +203,13 @@ func (a *aggMileageAndHoursHandler) makeRquestAddNewShift(shiftStructData shiftD
 		shiftStructData.mileageGPSData.GetMileageEnd(),
 		shiftStructData.mileageGPSData.GetMileageLoaded(),
 		shiftStructData.mileageGPSData.GetMileageEmpty(),
-	).Scan(shifId)
-	if err == nil {
-		log.Debugf("объект смены записан в БД id смены: %d", *shifId)
-	}
+	)
 	return err
 }
 
 // метод делает запрос в БД на добавление новой сессии в таблицу
-func (a *aggMileageAndHoursHandler) makeRquestAddNewSession(sessionStructData sessionDataFromModule, objId, shifId int, sessionId *int) error {
-	err := a.dbConn.QueryRowDB(addNewSession,
+func (a *aggMileageAndHoursHandler) makeRquestAddNewSession(ctx context.Context, sessionStructData sessionDataFromModule, objId, shifId int, sessionId *int) error {
+	err := a.dbConn.QueryRowWithResponseInt(ctx, addNewSession, sessionId,
 		shifId,
 		objId,
 		sessionStructData.mainData.GetDriverId(),
@@ -254,16 +230,13 @@ func (a *aggMileageAndHoursHandler) makeRquestAddNewSession(sessionStructData se
 		sessionStructData.mileageGPSData.GetMileageEnd(),
 		sessionStructData.mileageGPSData.GetMileageLoaded(),
 		sessionStructData.mileageGPSData.GetMileageEmpty(),
-	).Scan(sessionId)
-	if err == nil {
-		log.Debugf("объект cессии записан в БД id cессии: %d", *sessionId)
-	}
+	)
 	return err
 }
 
 // метод делает запрос в БД на обновление смены в таблице
-func (a *aggMileageAndHoursHandler) makeRequestUpdateShift(shiftStructData shiftDataFromModule) error {
-	err := a.dbConn.ExecQuery(updateShift,
+func (a *aggMileageAndHoursHandler) makeRequestUpdateShift(ctx context.Context, shiftStructData shiftDataFromModule) error {
+	err := a.dbConn.ExecQuery(ctx, updateShift,
 		shiftStructData.mainData.GetShiftId(),
 		shiftStructData.mainData.GetShiftDateEnd(),
 		shiftStructData.mainData.GetUpdatedTime(),
@@ -284,14 +257,11 @@ func (a *aggMileageAndHoursHandler) makeRequestUpdateShift(shiftStructData shift
 		shiftStructData.mileageGPSData.GetMileageLoaded(),
 		shiftStructData.mileageGPSData.GetMileageEmpty(),
 	)
-	if err == nil {
-		log.Debugf("объект смены обновлен в БД id смены: %d", shiftStructData.mainData.GetShiftId())
-	}
 	return err
 }
 
-func (a *aggMileageAndHoursHandler) makeRequestUpdateSession(sessionStructData sessionDataFromModule) error {
-	err := a.dbConn.ExecQuery(updateDriverSession,
+func (a *aggMileageAndHoursHandler) makeRequestUpdateSession(ctx context.Context, sessionStructData sessionDataFromModule) error {
+	err := a.dbConn.ExecQuery(ctx, updateDriverSession,
 		sessionStructData.mainData.GetSessionId(),
 		sessionStructData.mainData.GetOffset(),
 		sessionStructData.mainData.GetTimeUpdateSession(),
@@ -310,8 +280,5 @@ func (a *aggMileageAndHoursHandler) makeRequestUpdateSession(sessionStructData s
 		sessionStructData.mileageGPSData.GetMileageLoaded(),
 		sessionStructData.mileageGPSData.GetMileageEmpty(),
 	)
-	if err == nil {
-		log.Debugf("объект сессии обновлен в БД id сессии: %d", sessionStructData.mainData.GetSessionId())
-	}
 	return err
 }

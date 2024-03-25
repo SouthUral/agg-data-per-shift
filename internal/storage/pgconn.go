@@ -19,10 +19,12 @@ var (
 
 // структура объекта работы с БД
 type PgConn struct {
-	url            string
-	timeOutQueryes time.Duration
-	dbpool         *pgxpool.Pool
-	cancel         func()
+	url                       string
+	timeOutQueryes            time.Duration
+	dbpool                    *pgxpool.Pool
+	intervalBetweenRequest    int // начальный интервал между повтором запросов
+	maxIntervalBetweenRequest int // максимальный интервал между повтором запросов
+	cancel                    func()
 }
 
 func getUrl(data map[string]string) string {
@@ -42,14 +44,18 @@ func getUrl(data map[string]string) string {
 //   - timeOutQueryes: время ожидания ответа на запросы в БД (в миллисекундах);
 //   - checkTimeWait: время ожидания между проверками подключения к БД (в миллисекундах);
 //   - numAttemptConn: количество попыток реконнекта в случае дисконнекта БД;
-func InitPgConn(pgDataVars map[string]string, timeOutQueryes, checkTimeWait, numAttemptConn int) (*PgConn, context.Context) {
+//   - intervalBetweenRequest:  начальный интервал между повтором запросов;
+//   - maxIntervalBetweenRequest:  максимальный интервал между повтором запросов
+func InitPgConn(pgDataVars map[string]string, timeOutQueryes, checkTimeWait, numAttemptConn, intervalBetweenRequest, maxIntervalBetweenRequest int) (*PgConn, context.Context) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 
 	p := &PgConn{
-		url:            getUrl(pgDataVars),
-		cancel:         cancel,
-		timeOutQueryes: time.Duration(timeOutQueryes),
+		url:                       getUrl(pgDataVars),
+		cancel:                    cancel,
+		timeOutQueryes:            time.Duration(timeOutQueryes),
+		intervalBetweenRequest:    intervalBetweenRequest,
+		maxIntervalBetweenRequest: maxIntervalBetweenRequest,
 	}
 
 	// запуск процесса мониторинга и подключения к БД
@@ -126,29 +132,90 @@ func (p *PgConn) closePoolConn() {
 }
 
 // метод для запросов в БД (любой запрос, который вернет данные)
-func (p *PgConn) QueryDB(query string, args ...any) (pgx.Rows, error) {
-	ctx, _ := context.WithTimeout(context.Background(), p.timeOutQueryes*time.Second)
+func (p *PgConn) QueryDB(ctx context.Context, query string, args ...any) (pgx.Rows, error) {
+	var (
+		rows                    pgx.Rows
+		err                     error
+		intervalBetweenRequests = p.intervalBetweenRequest
+	)
+	for {
+		select {
+		case <-ctx.Done():
+			return rows, err
+		default:
+			ctxQuery, _ := context.WithTimeout(ctx, p.timeOutQueryes*time.Second)
+			rows, err = p.dbpool.Query(ctxQuery, query, args...)
+			if err == nil {
+				return rows, err
+			}
+			if isCriticalPgxError(err) {
+				p.Shutdown(err)
+				return rows, err
+			}
+			intervalBetweenRequests = cycleRetarder(intervalBetweenRequests, p.maxIntervalBetweenRequest)
+			log.Debug("Повторная попытка запроса")
+		}
 
-	rows, err := p.dbpool.Query(ctx, query, args...)
-	if err != nil {
-		log.Error(err)
 	}
-	return rows, err
 }
 
 // метод производит запрос, который вернет одну строку
-func (p *PgConn) QueryRowDB(query string, args ...any) pgx.Row {
-	ctx, _ := context.WithTimeout(context.Background(), p.timeOutQueryes*time.Second)
-
-	row := p.dbpool.QueryRow(ctx, query, args...)
+func (p *PgConn) QueryRowDB(ctx context.Context, query string, args ...any) pgx.Row {
+	ctxQuery, _ := context.WithTimeout(ctx, p.timeOutQueryes*time.Second)
+	row := p.dbpool.QueryRow(ctxQuery, query, args...)
 	return row
 }
 
+func (p *PgConn) QueryRowWithResponseInt(ctx context.Context, query string, responce *int, args ...any) error {
+	var (
+		err                     error
+		intervalBetweenRequests = p.intervalBetweenRequest
+	)
+
+	for {
+		select {
+		case <-ctx.Done():
+			return err
+		default:
+			err = p.QueryRowDB(ctx, query, args...).Scan(responce)
+			if err == nil {
+				return err
+			}
+			if isCriticalPgxError(err) {
+				p.Shutdown(err)
+				return err
+			}
+			intervalBetweenRequests = cycleRetarder(intervalBetweenRequests, p.maxIntervalBetweenRequest)
+			log.Debug("Повторная попытка запроса")
+		}
+	}
+}
+
 // метод производит запрос, который не должен ничего возвращать
-func (p *PgConn) ExecQuery(query string, args ...any) error {
-	ctx, _ := context.WithTimeout(context.Background(), p.timeOutQueryes*time.Second)
-	_, err := p.dbpool.Exec(ctx, query, args...)
-	return err
+func (p *PgConn) ExecQuery(ctx context.Context, query string, args ...any) error {
+	var (
+		err                     error
+		intervalBetweenRequests = p.intervalBetweenRequest
+	)
+	for {
+		select {
+		case <-ctx.Done():
+			return err
+		default:
+			ctxQuery, _ := context.WithTimeout(ctx, p.timeOutQueryes*time.Second)
+			_, err = p.dbpool.Exec(ctxQuery, query, args...)
+			if err == nil {
+				return err
+			}
+			if isCriticalPgxError(err) {
+				p.Shutdown(err)
+				return err
+			}
+			intervalBetweenRequests = cycleRetarder(intervalBetweenRequests, p.maxIntervalBetweenRequest)
+			log.Debug("Повторная попытка запроса")
+		}
+
+	}
 }
 
 // выводит количество используемых и неиспользуемых коннектов

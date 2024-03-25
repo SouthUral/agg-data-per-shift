@@ -45,7 +45,7 @@ func (c *Consumer) processCons(ctx context.Context) {
 
 	log.Info("process consuming start")
 	for msg := range c.chRb {
-		log.Debug("received a message from RabbitMQ")
+		// log.Debug("received a message from RabbitMQ")
 		ctxEvent, cancel := context.WithCancel(context.Background())
 		event := msgEvent{
 			signal:    cancel,

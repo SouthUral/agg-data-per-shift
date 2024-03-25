@@ -318,7 +318,7 @@ func (a *AggDataPerObject) sendingMesToStorage(ctx context.Context, mes mesForSt
 	var answer interface{}
 	var err error
 
-	// ctxTimeOut, _ := context.WithTimeout(context.Background(), time.Duration(timeWait)*time.Second)
+	// ctxTimeOut, _ := context.WithTimeout(ctx, 5*time.Second)
 	reverseChannel := make(chan interface{})
 
 	transportMes := transportStruct{
@@ -363,7 +363,11 @@ func (a *AggDataPerObject) eventReception(ctx context.Context, offset int64, eve
 			return
 		case a.incomingCh <- mes:
 			return
+		default:
+			log.Warningf("Попытки отправить сообщение в %d", a.objectId)
+			time.Sleep(1 * time.Second)
 		}
+
 	}
 }
 

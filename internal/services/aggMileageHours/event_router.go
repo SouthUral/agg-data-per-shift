@@ -26,7 +26,7 @@ func InitEventRouter(storageCh chan interface{}, timeMeter *utils.ProcessingTime
 	ctx, cancel := context.WithCancel(context.Background())
 
 	res := &EventRouter{
-		incomingEventCh: make(chan interface{}, 1000000),
+		incomingEventCh: make(chan interface{}, 1000),
 		cancel:          cancel,
 		aggObjs:         make(map[int]*AggDataPerObject),
 		storageCh:       storageCh,

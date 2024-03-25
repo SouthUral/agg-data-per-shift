@@ -53,6 +53,8 @@ func (p *ProcessingTimeMeter) SendMessToTimeMeter(msg TrunsportToProcessingTime)
 	select {
 	case p.incomingCh <- msg:
 		return
+	default:
+		return
 	}
 }
 
