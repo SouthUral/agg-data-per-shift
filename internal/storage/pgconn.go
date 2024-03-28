@@ -143,19 +143,23 @@ func (p *PgConn) QueryDB(ctx context.Context, query string, args ...any) (pgx.Ro
 		case <-ctx.Done():
 			return rows, err
 		default:
-			ctxQuery, _ := context.WithTimeout(ctx, p.timeOutQueryes*time.Second)
-			rows, err = p.dbpool.Query(ctxQuery, query, args...)
-			if err == nil {
-				return rows, err
+			if p.checkPool() == nil {
+				ctxQuery, _ := context.WithTimeout(ctx, p.timeOutQueryes*time.Second)
+				rows, err = p.dbpool.Query(ctxQuery, query, args...)
+
+				if err == nil {
+					return rows, err
+				}
+
+				if isCriticalPgxError(err) {
+					p.Shutdown(err)
+					return rows, err
+				}
 			}
-			if isCriticalPgxError(err) {
-				p.Shutdown(err)
-				return rows, err
-			}
+
 			intervalBetweenRequests = cycleRetarder(intervalBetweenRequests, p.maxIntervalBetweenRequest)
 			log.Debug("Повторная попытка запроса")
 		}
-
 	}
 }
 

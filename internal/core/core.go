@@ -8,6 +8,7 @@ import (
 
 	amqp "agg-data-per-shift/internal/amqp/amqp_client"
 	aggMileage "agg-data-per-shift/internal/services/aggMileageHours"
+	shiftLoader "agg-data-per-shift/internal/services/shiftLoader"
 	storage "agg-data-per-shift/internal/storage"
 	utils "agg-data-per-shift/pkg/utils"
 
@@ -27,10 +28,11 @@ var (
 	errConverRabbitMesError      = errors.New("error converting a message from rabbit")
 	errPgConnShutdownError       = errors.New("pgConn has stopped working")
 	errTimeMeterFinishError      = errors.New("timeMeter has stopped working")
+	errShiftsSetFinishError      = errors.New("shiftSet has stopped working")
 )
 
 func InitCore() {
-	var storageCtx, pgCtx, rabbitCtx, routerCtx, timeMeterCtx context.Context
+	var storageCtx, pgCtx, rabbitCtx, routerCtx, timeMeterCtx, ctxShiftSet context.Context
 
 	envs, err := getEnvs()
 	if err != nil {
@@ -52,13 +54,16 @@ func InitCore() {
 	core.pgConn, pgCtx = storage.InitPgConn(envs.pgEnvs, 1000, 1000, 60, 10, 10000)
 
 	core.storage, storageCtx = storage.InitStorageMessageHandler(core.pgConn)
+
+	core.shiftSet, ctxShiftSet = shiftLoader.InitSettingsDurationShifts(2, core.storage)
+
 	core.router, routerCtx = aggMileage.InitEventRouter(core.storage.GetStorageCh(), core.timeMeter)
 
 	// начало прослушивания очереди
 	rabbitCtx = core.rabbit.StartRb()
 
 	wg.Add(2)
-	go core.controlProcess(ctx, storageCtx, rabbitCtx, routerCtx, pgCtx, timeMeterCtx, wg)
+	go core.controlProcess(ctx, storageCtx, rabbitCtx, routerCtx, pgCtx, timeMeterCtx, ctxShiftSet, wg)
 	go core.routingEvents(ctx, wg)
 
 	wg.Wait()
@@ -71,6 +76,7 @@ type core struct {
 	storage      *storage.StorageMessageHandler
 	pgConn       *storage.PgConn
 	router       *aggMileage.EventRouter
+	shiftSet     *shiftLoader.SettingsDurationShifts
 	streamOffset string
 	cancel       func()
 }
@@ -81,6 +87,7 @@ func (c *core) shudown(err error) {
 	c.router.Shudown(err)
 	c.pgConn.Shutdown(err)
 	c.timeMeter.Shudown()
+	c.shiftSet.Shutdown(err)
 	c.cancel()
 	log.Errorf("the program stopped working due to: %s", err.Error())
 }
@@ -149,7 +156,7 @@ func responceAmqp(ctx context.Context, mes msgEvent) error {
 	}
 }
 
-func (c *core) controlProcess(ctx, ctxStorage, ctxRabbit, ctxRouter, ctxPgConn, ctxTimeMeter context.Context, wg *sync.WaitGroup) {
+func (c *core) controlProcess(ctx, ctxStorage, ctxRabbit, ctxRouter, ctxPgConn, ctxTimeMeter, ctxShiftsSet context.Context, wg *sync.WaitGroup) {
 	defer wg.Done()
 	defer log.Warning("CORE control process has finished")
 	for {
@@ -171,6 +178,8 @@ func (c *core) controlProcess(ctx, ctxStorage, ctxRabbit, ctxRouter, ctxPgConn, 
 		case <-ctxTimeMeter.Done():
 			c.shudown(errTimeMeterFinishError)
 			return
+		case <-ctxShiftsSet.Done():
+			c.shudown(errShiftsSetFinishError)
 		default:
 			time.Sleep(10 * time.Millisecond)
 		}

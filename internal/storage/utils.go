@@ -10,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
+// функция для конвертации rows в одну структуру
 func converQuery[T any](rows pgx.Rows) (T, error) {
 	var rowObj T
 
@@ -22,6 +23,19 @@ func converQuery[T any](rows pgx.Rows) (T, error) {
 	}
 
 	return rowObj, err
+}
+
+// функция для конвертации данных бд в слайс структур
+func convertQueryRows[T any](rows pgx.Rows) ([]T, error) {
+	var rowsObj []T
+	var err error
+
+	rowsObj, err = pgx.CollectRows[T](rows, pgx.RowToStructByName[T])
+	if err != nil {
+		err = utils.Wrapper(convertRowToStructError{}, err)
+
+	}
+	return rowsObj, err
 }
 
 // функция определяет критическая ли ошибка  pgx, если ошибка критическая то вернen true

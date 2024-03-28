@@ -171,6 +171,16 @@ const (
 		mileage_gps_end = $15,
 		mileage_gps_loaded = $16,
 		mileage_gps_empty = $17
-	WHERE id = $1;
+	WHERE id = $1;`
+	getSettingsShifts = `
+	SELECT 
+		ss.start_offset,
+		sd."number",
+		sd.description ,
+		sd."start" ,
+		sd.duration 
+	FROM sh_data.dir_shifts_schemes ss
+	JOIN sh_data.dir_shifts sd ON ss.id = sd.scheme_id 
+	WHERE ss.is_default = true;
 	`
 )

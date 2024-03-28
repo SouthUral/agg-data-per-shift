@@ -15,6 +15,7 @@ type StorageMessageHandler struct {
 	cancel     func()
 	amqpHandler
 	aggMileageAndHoursHandler
+	shiftSettingsHandler
 }
 
 // метод прекращает работу модуля psql (завершает все активные горутины, разрывает коннект с БД)
@@ -39,6 +40,7 @@ func InitStorageMessageHandler(dbConn *PgConn) (*StorageMessageHandler, context.
 
 	s.amqpHandler.dbConn = dbConn
 	s.aggMileageAndHoursHandler.dbConn = dbConn
+	s.shiftSettingsHandler.dbConn = dbConn
 
 	go s.listenAndServe(ctx)
 
